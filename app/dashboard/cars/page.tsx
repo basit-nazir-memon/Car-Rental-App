@@ -86,7 +86,7 @@ const carModels = [
 ];
 
 export default function CarsPage() {
-  const [cars, setCars] = useState([]);
+  const [cars, setCars] = useState(carModels);
   const [searchQuery, setSearchQuery] = useState("");
 
   const fetchCars = async () => {
@@ -106,7 +106,7 @@ export default function CarsPage() {
       }
 
       const data = await response.json();
-      setCars(data);
+      // setCars(data);
     } catch (error) {
       console.error("Error fetching cars:", error);
     }
