@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation"
 import { Loader2 } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { useAuth } from "@/lib/auth"
+import config from "../config"
 
 export default function Home() {
   const [email, setEmail] = useState("")
@@ -57,15 +58,33 @@ export default function Home() {
     setIsLoading(true)
     setError(null)
     setSuccess(null)
-  
+    
     try {
-      await login(email, password) // Use the login function from AuthContext
+      const response = await fetch(`${config.backendUrl}/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Login failed");
+      }
+
+      // Simulate JWT token from backend
+      const authToken = data.token;
+
+      // Store token in localStorage
+      localStorage.setItem("token", authToken);
+      localStorage.setItem("role", data.role);
       setSuccess("Login successful! Redirecting...")
       setTimeout(() => router.push("/dashboard"), 1000)
     } catch (err: any) {
+      console.error("Login error:", err);
       setError(err.message)
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
   }
 
