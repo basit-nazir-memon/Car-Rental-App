@@ -1,88 +1,137 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { ChevronLeft, Calendar, Car, Edit } from "lucide-react"
 import { format } from "date-fns"
-
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
+import config from "../../../../config"
+import { useParams } from "next/navigation"
 
-// Mock data for a specific customer
-const customerData = {
-  id: 1,
-  name: "John Doe",
-  phone: "+92 300 1234567",
-  idCard: "12345-6789012-3",
-  email: "john.doe@example.com",
-  address: "123 Main Street, Karachi, Pakistan",
-  joinDate: "2022-10-15",
+interface CustomerData {
+  id: string
+  name: string
+  phone: string
+  idCard: string
+  email: string
+  address: string
+  joinDate: string
+  bookingCount: number
+  lastBookingDate: string
 }
 
-// Mock data for customer bookings
-const customerBookings = [
-  {
-    id: 101,
-    carModel: "Toyota Corolla",
-    carYear: 2022,
-    registrationNumber: "ABC-123",
-    driverName: "David Johnson",
-    startDate: new Date(2023, 2, 15),
-    endDate: new Date(2023, 2, 18),
-    totalAmount: 15000,
-    status: "completed",
-  },
-  {
-    id: 102,
-    carModel: "Honda Civic",
-    carYear: 2021,
-    registrationNumber: "DEF-456",
-    driverName: "Michael Brown",
-    startDate: new Date(2023, 1, 10),
-    endDate: new Date(2023, 1, 15),
-    totalAmount: 12500,
-    status: "completed",
-  },
-  {
-    id: 103,
-    carModel: "Suzuki Swift",
-    carYear: 2020,
-    registrationNumber: "GHI-789",
-    driverName: "John Smith",
-    startDate: new Date(2022, 11, 20),
-    endDate: new Date(2022, 11, 25),
-    totalAmount: 10000,
-    status: "completed",
-  },
-  {
-    id: 104,
-    carModel: "Toyota Corolla",
-    carYear: 2022,
-    registrationNumber: "JKL-012",
-    driverName: "David Johnson",
-    startDate: new Date(2022, 9, 5),
-    endDate: new Date(2022, 9, 10),
-    totalAmount: 15000,
-    status: "completed",
-  },
-  {
-    id: 105,
-    carModel: "Honda Civic",
-    carYear: 2021,
-    registrationNumber: "MNO-345",
-    driverName: "Michael Brown",
-    startDate: new Date(2023, 3, 1),
-    endDate: new Date(2023, 3, 10),
-    totalAmount: 25000,
-    status: "active",
-  },
-]
+interface Booking {
+  id: string
+  carModel: string
+  carYear: number
+  registrationNumber: string
+  driverName: string
+  startDate: string
+  endDate: string
+  totalAmount: number
+  status: string
+  tripType: string
+  advancePaid: number
+  remainingAmount: number
+  discountPercentage: number
+  meterReading: number
+}
 
-export default function CustomerDetailPage({ params }: { params: { customerId: string } }) {
+interface Statistics {
+  totalBookings: number
+  totalSpent: number
+  completedBookings: number
+  activeBookings: number
+  averageBookingAmount: number
+}
+
+interface CustomerDetails {
+  customerData: CustomerData
+  customerBookings: Booking[]
+  statistics: Statistics
+}
+
+export default function CustomerDetailPage() {
   const [activeTab, setActiveTab] = useState("details")
+  const [customerDetails, setCustomerDetails] = useState<CustomerDetails | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+
+  const params = useParams();
+  const customerId = params.customerId as string;
+
+  useEffect(() => {
+    fetchCustomerDetails()
+  }, [params.customerId])
+
+  const fetchCustomerDetails = async () => {
+    try {
+      setIsLoading(true)
+      const token = localStorage.getItem("token")
+      const response = await fetch(`${config.backendUrl}/customers/${params.customerId}/details`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch customer details")
+      }
+
+      const data = await response.json()
+      setCustomerDetails(data)
+    } catch (error) {
+      console.error("Error fetching customer details:", error)
+      toast.error("Failed to fetch customer details")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col gap-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="icon" asChild>
+              <Link href="/dashboard/customers">
+                <ChevronLeft className="h-4 w-4" />
+              </Link>
+            </Button>
+            <h1 className="text-3xl font-bold tracking-tight">Loading...</h1>
+          </div>
+          <Button disabled>
+            <Edit className="mr-2 h-4 w-4" />
+            Edit Customer
+          </Button>
+        </div>
+        <div className="animate-pulse space-y-4">
+          <div className="h-96 w-full rounded-lg bg-muted" />
+        </div>
+      </div>
+    )
+  }
+
+  if (!customerDetails) {
+    return (
+      <div className="flex flex-col gap-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="icon" asChild>
+              <Link href="/dashboard/customers">
+                <ChevronLeft className="h-4 w-4" />
+              </Link>
+            </Button>
+            <h1 className="text-3xl font-bold tracking-tight">Customer Not Found</h1>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -93,7 +142,7 @@ export default function CustomerDetailPage({ params }: { params: { customerId: s
               <ChevronLeft className="h-4 w-4" />
             </Link>
           </Button>
-          <h1 className="text-3xl font-bold tracking-tight">{customerData.name}</h1>
+          <h1 className="text-3xl font-bold tracking-tight">{customerDetails.customerData.name}</h1>
         </div>
         <Button asChild>
           <Link href={`/dashboard/customers/${params.customerId}/edit`}>
@@ -119,31 +168,31 @@ export default function CustomerDetailPage({ params }: { params: { customerId: s
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Full Name</p>
-                  <p className="text-lg">{customerData.name}</p>
+                  <p className="text-lg">{customerDetails.customerData.name}</p>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Phone Number</p>
-                  <p className="text-lg">{customerData.phone}</p>
+                  <p className="text-lg">{customerDetails.customerData.phone}</p>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">ID Card Number</p>
-                  <p className="text-lg">{customerData.idCard}</p>
+                  <p className="text-lg">{customerDetails.customerData.idCard}</p>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Email</p>
-                  <p className="text-lg">{customerData.email}</p>
+                  <p className="text-lg">{customerDetails.customerData.email}</p>
                 </div>
                 <div className="md:col-span-2">
                   <p className="text-sm font-medium text-muted-foreground">Address</p>
-                  <p className="text-lg">{customerData.address}</p>
+                  <p className="text-lg">{customerDetails.customerData.address}</p>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Join Date</p>
-                  <p className="text-lg">{customerData.joinDate}</p>
+                  <p className="text-lg">{format(new Date(customerDetails.customerData.joinDate), "MMM dd, yyyy")}</p>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Total Bookings</p>
-                  <p className="text-lg">{customerBookings.length}</p>
+                  <p className="text-lg">{customerDetails.statistics.totalBookings}</p>
                 </div>
               </div>
 
@@ -155,7 +204,7 @@ export default function CustomerDetailPage({ params }: { params: { customerId: s
                   </Link>
                 </Button>
                 <Button asChild>
-                  <Link href="/dashboard/bookings/new">New Booking</Link>
+                  <Link href="/dashboard/cars">New Booking</Link>
                 </Button>
               </div>
             </CardContent>
@@ -168,7 +217,7 @@ export default function CustomerDetailPage({ params }: { params: { customerId: s
             </CardHeader>
             <CardContent>
               <div className="space-y-8">
-                {customerBookings.slice(0, 3).map((booking) => (
+                {customerDetails.customerBookings.slice(0, 3).map((booking) => (
                   <div key={booking.id} className="flex items-center">
                     <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
                       {booking.status === "active" ? (
@@ -182,10 +231,11 @@ export default function CustomerDetailPage({ params }: { params: { customerId: s
                         {booking.carModel} ({booking.carYear})
                       </p>
                       <p className="text-sm text-muted-foreground">
-                        {format(booking.startDate, "MMM dd, yyyy")} - {format(booking.endDate, "MMM dd, yyyy")}
+                        {format(new Date(booking.startDate), "MMM dd, yyyy")} -{" "}
+                        {format(new Date(booking.endDate), "MMM dd, yyyy")}
                       </p>
                     </div>
-                    <div className="ml-auto font-medium">${booking.totalAmount}</div>
+                    <div className="ml-auto font-medium">Rs. {booking.totalAmount.toLocaleString()}</div>
                   </div>
                 ))}
               </div>
@@ -213,16 +263,16 @@ export default function CustomerDetailPage({ params }: { params: { customerId: s
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {customerBookings.map((booking) => (
+                  {customerDetails.customerBookings.map((booking) => (
                     <TableRow key={booking.id}>
                       <TableCell>
                         <div className="font-medium">{booking.carModel}</div>
                         <div className="text-sm text-muted-foreground">{booking.registrationNumber}</div>
                       </TableCell>
                       <TableCell>{booking.driverName}</TableCell>
-                      <TableCell>{format(booking.startDate, "MMM dd, yyyy")}</TableCell>
-                      <TableCell>{format(booking.endDate, "MMM dd, yyyy")}</TableCell>
-                      <TableCell>${booking.totalAmount}</TableCell>
+                      <TableCell>{format(new Date(booking.startDate), "MMM dd, yyyy")}</TableCell>
+                      <TableCell>{format(new Date(booking.endDate), "MMM dd, yyyy")}</TableCell>
+                      <TableCell>Rs. {booking.totalAmount.toLocaleString()}</TableCell>
                       <TableCell>
                         <Badge variant={booking.status === "active" ? "default" : "secondary"}>
                           {booking.status === "active" ? "Active" : "Completed"}

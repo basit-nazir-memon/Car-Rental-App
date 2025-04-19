@@ -78,6 +78,9 @@ export default function Home() {
       // Store token in localStorage
       localStorage.setItem("token", authToken);
       localStorage.setItem("role", data.role);
+      localStorage.setItem("email", data.email);
+      localStorage.setItem("name", data.name);
+      localStorage.setItem("avatar", data.avatar);
       setSuccess("Login successful! Redirecting...")
       setTimeout(() => router.push("/dashboard"), 1000)
     } catch (err: any) {
@@ -130,9 +133,9 @@ export default function Home() {
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="password">Password</Label>
-                <Button variant="link" className="p-0 h-auto text-xs" type="button">
+                {/* <Button variant="link" className="p-0 h-auto text-xs" type="button">
                   Forgot password?
-                </Button>
+                </Button> */}
               </div>
               <Input
                 id="password"

@@ -1,11 +1,14 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import Link from "next/link"
 import Image from "next/image"
-import { ChevronLeft, Download, Printer, Share2, Edit } from "lucide-react"
+import { ChevronLeft, Download, Printer, Share2, Edit, X } from "lucide-react"
 import { format } from "date-fns"
 import { useReactToPrint } from "react-to-print"
+import { useParams, useRouter } from "next/navigation"
+import { toast } from "sonner"
+import config from "../../../../config"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -22,83 +25,269 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Textarea } from "@/components/ui/textarea"
 
-// Mock data for a specific booking
-const bookingData = {
-  id: 1,
-  status: "active",
+interface Booking {
+  id: string
+  status: string
   customer: {
-    name: "John Doe",
-    phone: "+92 300 1234567",
-    idCard: "12345-6789012-3",
-  },
+    name: string
+    phone: string
+    idCard: string
+  }
   car: {
-    model: "Toyota Corolla",
-    year: 2022,
-    color: "red",
-    registrationNumber: "ABC-123",
-    chassisNumber: "TC2022RED001",
-    engineNumber: "ENG2022001",
-    image: "/placeholder.svg?height=200&width=300",
-    meterReading: 12500,
-  },
+    model: string
+    year: number
+    color: string
+    registrationNumber: string
+    chassisNumber: string
+    engineNumber: string
+    image: string
+    meterReading: number
+  }
   driver: {
-    name: "David Johnson",
-    phone: "+92 301 2345678",
-    idCard: "23456-7890123-4",
-    image: "/placeholder.svg?height=100&width=100",
-  },
+    name: string
+    phone: string
+    idCard: string
+    image: string
+  }
   trip: {
-    type: "within-city",
-    city: "",
-    startDate: new Date(2023, 2, 15),
-    endDate: new Date(2023, 2, 18),
-    actualEndDate: null,
-  },
+    type: string
+    city: string
+    startDate: string
+    endDate: string
+    actualEndDate: string | null
+    startTime: string
+    endTime: string | null
+  }
   billing: {
-    totalAmount: 15000,
-    advancePaid: 5000,
-    discount: 0,
-    discountReference: "",
-    remaining: 10000,
-  },
-  createdAt: new Date(2023, 2, 14),
-  createdBy: "Employee Name",
+    totalAmount: number
+    advancePaid: number
+    discount: number
+    discountReference: string
+    remaining: number
+  }
+  createdAt: string
+  createdBy: string
+  updatedAt: string
+  lastModifiedBy: string
 }
 
-export default function BookingDetailPage({ params }: { params: { bookingId: string } }) {
+export default function BookingDetailPage() {
+  const params = useParams()
+  const router = useRouter()
+  const [bookingData, setBookingData] = useState<Booking | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [isEndingBooking, setIsEndingBooking] = useState(false)
-  const [actualEndDate, setActualEndDate] = useState<Date | null>(null)
+  const [actualEndDate, setActualEndDate] = useState<Date>(new Date())
   const [finalMeterReading, setFinalMeterReading] = useState<string>("")
   const printRef = useRef<HTMLDivElement>(null)
+  const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false)
+  const [cancellationReason, setCancellationReason] = useState("")
+  const [isCancelling, setIsCancelling] = useState(false)
+  const [cancelError, setCancelError] = useState<string | null>(null)
+  const [isEndingDialogOpen, setIsEndingDialogOpen] = useState(false)
 
-  const handleEndBooking = () => {
-    // This would normally update the booking in the database
-    console.log("Ending booking with actual end date:", actualEndDate)
-    console.log("Final meter reading:", finalMeterReading)
-    setIsEndingBooking(false)
-  }
-
-  const handleCancelBooking = () => {
-    // This would normally cancel the booking in the database
-    console.log("Cancelling booking:", bookingData.id)
-  }
-
-  const handlePrint = useReactToPrint({
-    content: () => printRef.current,
-    documentTitle: `Booking_${bookingData.id}_Report`,
+  const print = useReactToPrint({
+    contentRef: printRef,
+    documentTitle: `Booking_${bookingData?.id}_Report`,
     onAfterPrint: () => console.log("Printed successfully"),
   })
 
-  const handleDownloadReport = () => {
-    // Use the same print functionality but trigger download instead
-    handlePrint()
-    console.log("Downloading report for booking:", bookingData.id)
+  useEffect(() => {
+    const fetchBookingDetails = async () => {
+      try {
+        setIsLoading(true)
+        setError(null)
+        const token = localStorage.getItem("token")
+        const response = await fetch(
+          `${config.backendUrl}/bookings/${params.bookingId}/details`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        )
+
+        if (!response.ok) {
+          throw new Error("Failed to fetch booking details")
+        }
+
+        const data = await response.json()
+        setBookingData(data)
+      } catch (error) {
+        console.error("Error fetching booking details:", error)
+        setError("Failed to load booking details. Please try again later.")
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    if (params.bookingId) {
+      fetchBookingDetails()
+    }
+  }, [params.bookingId])
+
+  const handleEndBooking = async () => {
+    if (!actualEndDate || !finalMeterReading) {
+      toast.error("Please fill in all required fields")
+      return
+    }
+
+    try {
+      setIsEndingBooking(true)
+      const token = localStorage.getItem("token")
+      if (!token) {
+        throw new Error("No authentication token found")
+      }
+
+      const response = await fetch(`${config.backendUrl}/bookings/${params.bookingId}/end`, {
+        method: "PATCH",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          endTime: actualEndDate.toISOString(),
+          finalMeterReading: Number(finalMeterReading),
+        }),
+      })
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error("Unauthorized: Please login again")
+        }
+        throw new Error("Failed to end booking")
+      }
+
+      toast.success("Booking ended successfully")
+      setIsEndingBooking(false)
+      setIsEndingDialogOpen(false)
+      // router.refresh()
+      setBookingData(prevData => prevData ? { ...prevData, status: "completed" } : null)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to end booking")
+      console.error("Error ending booking:", error)
+    } finally {
+      setIsEndingBooking(false)
+    }
   }
 
-  const handleShareReport = () => {
-    // This would normally share the report via WhatsApp or email
-    console.log("Sharing report for booking:", bookingData.id)
+  const handleCancelBooking = async () => {
+    if (!cancellationReason.trim()) {
+      setCancelError("Please provide a cancellation reason")
+      return
+    }
+
+    setIsCancelling(true)
+    setCancelError(null)
+
+    try {
+      const response = await fetch(`${config.backendUrl}/bookings/${params.bookingId}/cancel`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+        body: JSON.stringify({
+          cancellationReason: cancellationReason.trim(),
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to cancel booking")
+      }
+
+      // Refresh the page to show updated status
+      router.refresh()
+      setIsCancelDialogOpen(false)
+    } catch (error) {
+      console.error("Error cancelling booking:", error)
+      setCancelError("Failed to cancel booking. Please try again.")
+    } finally {
+      setIsCancelling(false)
+    }
+  }
+
+  const handlePrint = () => {
+    if (printRef.current) {
+      print()
+    }
+  }
+
+  const handleDownloadReport = () => {
+    handlePrint()
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col gap-6">
+        <div className="flex items-center justify-between">
+          <Skeleton className="h-9 w-48" />
+          <Skeleton className="h-10 w-32" />
+        </div>
+        <div className="grid gap-6 md:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <Skeleton className="h-6 w-32" />
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <div key={index} className="space-y-2">
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-6 w-full" />
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <Skeleton className="h-6 w-32" />
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <div key={index} className="space-y-2">
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-6 w-full" />
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col gap-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-3xl font-bold tracking-tight">Error</h1>
+          <Button variant="outline" asChild>
+            <Link href="/dashboard/bookings">Back to Bookings</Link>
+          </Button>
+        </div>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-center text-destructive">{error}</div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  if (!bookingData) {
+    return (
+      <div className="flex flex-col gap-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-3xl font-bold tracking-tight">Booking Not Found</h1>
+          <Button variant="outline" asChild>
+            <Link href="/dashboard/bookings">Back to Bookings</Link>
+          </Button>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -113,8 +302,8 @@ export default function BookingDetailPage({ params }: { params: { bookingId: str
           <h1 className="text-3xl font-bold tracking-tight">Booking #{bookingData.id}</h1>
         </div>
         <div className="flex items-center gap-2">
-          <Badge variant={bookingData.status === "active" ? "default" : "secondary"}>
-            {bookingData.status === "active" ? "Active" : "Completed"}
+          <Badge variant={bookingData.status === "active" ? "default" : bookingData.status === "cancelled" ? "destructive" : "secondary"}>
+            {bookingData.status === "active" ? "Active" : bookingData.status === "cancelled" ? "Cancelled" : "Completed"}
           </Badge>
           {bookingData.status === "active" && (
             <Button variant="outline" asChild>
@@ -246,14 +435,14 @@ export default function BookingDetailPage({ params }: { params: { bookingId: str
                   <div className="col-span-2">
                     <p className="text-sm font-medium text-muted-foreground">Duration</p>
                     <p>
-                      {format(bookingData.trip.startDate, "MMM dd, yyyy")} -{" "}
-                      {format(bookingData.trip.endDate, "MMM dd, yyyy")}
+                      {format(new Date(bookingData.trip.startDate), "MMM dd, yyyy")} -{" "}
+                      {format(new Date(bookingData.trip.endDate), "MMM dd, yyyy")}
                     </p>
                   </div>
                   {bookingData.trip.actualEndDate && (
                     <div className="col-span-2">
                       <p className="text-sm font-medium text-muted-foreground">Actual End Date</p>
-                      <p>{format(bookingData.trip.actualEndDate, "MMM dd, yyyy")}</p>
+                      <p>{format(new Date(bookingData.trip.actualEndDate), "MMM dd, yyyy")}</p>
                     </div>
                   )}
                 </div>
@@ -309,20 +498,16 @@ export default function BookingDetailPage({ params }: { params: { bookingId: str
           <div className="flex flex-wrap gap-4">
             {bookingData.status === "active" ? (
               <>
-                <Dialog open={isEndingBooking} onOpenChange={setIsEndingBooking}>
+                <Dialog open={isEndingDialogOpen} onOpenChange={setIsEndingDialogOpen}>
                   <DialogTrigger asChild>
                     <Button>End Booking</Button>
                   </DialogTrigger>
                   <DialogContent>
                     <DialogHeader>
                       <DialogTitle>End Booking</DialogTitle>
-                      <DialogDescription>Enter the actual end date and time for this booking.</DialogDescription>
+                      <DialogDescription>Enter the final meter reading and time for this booking.</DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
-                      <div className="grid gap-2">
-                        <Label>Actual End Date</Label>
-                        <Input type="datetime-local" onChange={(e) => setActualEndDate(new Date(e.target.value))} />
-                      </div>
                       <div className="grid gap-2">
                         <Label htmlFor="finalMeterReading">Final Meter Reading (km)</Label>
                         <Input
@@ -333,16 +518,39 @@ export default function BookingDetailPage({ params }: { params: { bookingId: str
                           required
                         />
                       </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="endTime">End Time</Label>
+                        <Input
+                          id="endTime"
+                          type="time"
+                          value={format(actualEndDate, "HH:mm")}
+                          onChange={(e) => {
+                            const [hours, minutes] = e.target.value.split(":")
+                            const newDate = new Date(actualEndDate)
+                            newDate.setHours(parseInt(hours))
+                            newDate.setMinutes(parseInt(minutes))
+                            setActualEndDate(newDate)
+                          }}
+                          required
+                        />
+                      </div>
                     </div>
                     <DialogFooter>
-                      <Button variant="outline" onClick={() => setIsEndingBooking(false)}>
+                      <Button variant="outline" onClick={() => setIsEndingDialogOpen(false)}>
                         Cancel
                       </Button>
-                      <Button onClick={handleEndBooking}>End Booking</Button>
+                      <Button onClick={handleEndBooking} disabled={isEndingBooking}>
+                        {isEndingBooking ? "Ending Booking..." : "End Booking"}
+                      </Button>
                     </DialogFooter>
                   </DialogContent>
                 </Dialog>
-                <Button variant="outline" onClick={handleCancelBooking}>
+                <Button 
+                  variant="outline" 
+                  onClick={() => setIsCancelDialogOpen(true)}
+                  className="text-destructive hover:text-destructive"
+                >
+                  <X className="mr-2 h-4 w-4" />
                   Cancel Booking
                 </Button>
                 <Button variant="outline" asChild>
@@ -350,7 +558,7 @@ export default function BookingDetailPage({ params }: { params: { bookingId: str
                 </Button>
               </>
             ) : (
-              <Button disabled>Booking Completed</Button>
+              <Button disabled>{bookingData.status === "cancelled" ? "Booking Cancelled" : "Booking Completed"}</Button>
             )}
             <Button variant="outline" onClick={handleDownloadReport}>
               <Download className="mr-2 h-4 w-4" />
@@ -360,19 +568,67 @@ export default function BookingDetailPage({ params }: { params: { bookingId: str
               <Printer className="mr-2 h-4 w-4" />
               Print Report
             </Button>
-            <Button variant="outline" onClick={handleShareReport}>
-              <Share2 className="mr-2 h-4 w-4" />
-              Share Report
-            </Button>
           </div>
         </CardContent>
         <CardFooter className="border-t px-6 py-4">
           <div className="flex items-center justify-between w-full text-xs text-muted-foreground">
-            <p>Created on {format(bookingData.createdAt, "MMM dd, yyyy")}</p>
+            <p>Created on {format(new Date(bookingData.createdAt), "MMM dd, yyyy")}</p>
             <p>Created by {bookingData.createdBy}</p>
           </div>
         </CardFooter>
       </Card>
+
+      {/* <div className="flex justify-end gap-2">
+        <Button 
+          variant="outline" 
+          onClick={() => setIsCancelDialogOpen(true)}
+          className="text-destructive hover:text-destructive"
+        >
+          <X className="mr-2 h-4 w-4" />
+          Cancel Booking
+        </Button>
+        <Button variant="outline" asChild>
+          <Link href="/dashboard/bookings">Back to Bookings</Link>
+        </Button>
+      </div> */}
+
+      <Dialog open={isCancelDialogOpen} onOpenChange={setIsCancelDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cancel Booking</DialogTitle>
+            <DialogDescription>
+              Please provide a reason for cancelling this booking.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Textarea
+              placeholder="Enter cancellation reason..."
+              value={cancellationReason}
+              onChange={(e) => setCancellationReason(e.target.value)}
+              className="min-h-[100px]"
+            />
+            {cancelError && (
+              <p className="text-sm text-destructive">{cancelError}</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsCancelDialogOpen(false)}
+              disabled={isCancelling}
+            >
+              Back
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleCancelBooking}
+              disabled={isCancelling}
+            >
+              {isCancelling ? "Cancelling..." : "Confirm Cancellation"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

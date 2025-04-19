@@ -15,6 +15,7 @@ import {
   DollarSign,
   UserCog,
   FileText,
+  Settings,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -22,6 +23,7 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UserNav } from "@/components/user-nav";
 import { useAuth } from "@/lib/auth";
+import SettingsPage from "./settings/page";
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   const [userRole, setUserRole] = useState("");
@@ -103,13 +105,6 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                     <DollarSign className="h-5 w-5" />
                     Expenses
                   </Link>
-                  <Link
-                    href="/dashboard/analytics"
-                    className="flex items-center gap-2 rounded-lg px-3 py-2 text-muted-foreground hover:text-primary hover:bg-muted"
-                  >
-                    <BarChart3 className="h-5 w-5" />
-                    Analytics
-                  </Link>
                 </>
               )}
               {userRole === "stakeholder" && (
@@ -121,8 +116,23 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                   My Cars
                 </Link>
               )}
+              <Link
+                href="/dashboard/settings"
+                className="flex items-center gap-2 rounded-lg px-3 py-2 text-muted-foreground hover:text-primary hover:bg-muted"
+              >
+              <Settings className="h-4 w-4" />
+              Settings
+            </Link>
             </nav>
             <div className="mt-auto">
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full justify-start gap-2"
+              >
+                <Settings className="h-4 w-4" />
+                Settings
+              </Button>
               <Button
                 variant="outline"
                 size="sm"
@@ -208,13 +218,6 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                   Expenses
                 </Link>
                 <Link
-                  href="/dashboard/analytics"
-                  className="flex items-center gap-2 rounded-lg px-3 py-2 text-muted-foreground hover:text-primary hover:bg-muted"
-                >
-                  <BarChart3 className="h-4 w-4" />
-                  Analytics
-                </Link>
-                <Link
                   href="/dashboard/reports"
                   className="flex items-center gap-2 rounded-lg px-3 py-2 text-muted-foreground hover:text-primary hover:bg-muted"
                 >
@@ -232,6 +235,13 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                 My Cars
               </Link>
             )}
+            <Link
+              href="/dashboard/settings"
+              className="flex items-center gap-2 rounded-lg px-3 py-2 text-muted-foreground hover:text-primary hover:bg-muted"
+            >
+              <Settings className="h-4 w-4" />
+              Settings
+            </Link>
           </nav>
         </aside>
         <main className="flex-1 p-4 md:p-6">{children}</main>

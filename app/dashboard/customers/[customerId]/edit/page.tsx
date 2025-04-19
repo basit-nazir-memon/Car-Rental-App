@@ -1,128 +1,216 @@
 "use client"
 
-import type React from "react"
-
-import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useState, useEffect } from "react"
 import Link from "next/link"
-import { ChevronLeft, Save } from "lucide-react"
-
+import { useRouter, useParams } from "next/navigation"
+import { ChevronLeft } from "lucide-react"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
+import { Skeleton } from "@/components/ui/skeleton"
+import config from "../../../../../config"
 
-// Mock data for a specific customer
-const customerData = {
-  id: 1,
-  name: "John Doe",
-  phone: "+92 300 1234567",
-  idCard: "12345-6789012-3",
-  email: "john.doe@example.com",
-  address: "123 Main Street, Karachi, Pakistan",
-  joinDate: "2022-10-15",
+interface CustomerData {
+  id: string
+  name: string
+  phone: string
+  idCard: string
+  email: string
+  address: string
+  joinDate: string
+  bookingCount: number
+  lastBookingDate: string
 }
 
-export default function EditCustomerPage({ params }: { params: { customerId: string } }) {
+export default function EditCustomerPage() {
   const router = useRouter()
-  const [formData, setFormData] = useState({
-    name: customerData.name,
-    phone: customerData.phone,
-    idCard: customerData.idCard,
-    email: customerData.email,
-    address: customerData.address,
-  })
-  const [isSubmitting, setIsSubmitting] = useState(false)
+  const params = useParams()
+  const customerId = params.customerId as string
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target
-    setFormData((prev) => ({ ...prev, [name]: value }))
+  const [isLoading, setIsLoading] = useState(true)
+  const [isSaving, setIsSaving] = useState(false)
+  const [customerData, setCustomerData] = useState<CustomerData | null>(null)
+  const [formData, setFormData] = useState({
+    fullName: "",
+    email: "",
+    address: "",
+  })
+
+  useEffect(() => {
+    if (customerId) {
+      fetchCustomerDetails()
+    }
+  }, [customerId])
+
+  const fetchCustomerDetails = async () => {
+    try {
+      setIsLoading(true)
+      const token = localStorage.getItem("token")
+      const response = await fetch(`${config.backendUrl}/customers/${customerId}/details`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch customer details")
+      }
+
+      const data = await response.json()
+      setCustomerData(data.customerData)
+      setFormData({
+        fullName: data.customerData.name,
+        email: data.customerData.email,
+        address: data.customerData.address,
+      })
+    } catch (error) {
+      console.error("Error fetching customer details:", error)
+      toast.error("Failed to fetch customer details")
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsSubmitting(true)
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { id, value } = e.target
+    setFormData((prev) => ({ ...prev, [id]: value }))
+  }
 
+  const handleSave = async () => {
+    if (!formData.fullName || !formData.email || !formData.address) {
+      toast.error("All fields are required")
+      return
+    }
+
+    setIsSaving(true)
     try {
-      // This would normally be a fetch to your backend API
-      // For demo purposes, we'll simulate a successful update
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      const token = localStorage.getItem("token")
+      const response = await fetch(`${config.backendUrl}/customers/${customerId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(formData),
+      })
 
-      // Redirect back to customer details page
-      router.push(`/dashboard/customers/${params.customerId}`)
+      if (!response.ok) {
+        throw new Error("Failed to update customer")
+      }
+
+      toast.success("Customer updated successfully")
+      router.push(`/dashboard/customers/${customerId}`)
     } catch (error) {
       console.error("Error updating customer:", error)
+      toast.error("Failed to update customer")
     } finally {
-      setIsSubmitting(false)
+      setIsSaving(false)
     }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col gap-6">
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="icon" asChild>
+            <Link href={`/dashboard/customers/${customerId}`}>
+              <ChevronLeft className="h-4 w-4" />
+            </Link>
+          </Button>
+          <h1 className="text-3xl font-bold tracking-tight">Loading...</h1>
+        </div>
+
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-6 w-48" />
+            <Skeleton className="h-4 w-64" />
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {Array.from({ length: 3 }).map((_, index) => (
+              <div key={index} className="space-y-2">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-10 w-full" />
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  if (!customerData) {
+    return (
+      <div className="flex flex-col gap-6">
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="icon" asChild>
+            <Link href={`/dashboard/customers/${customerId}`}>
+              <ChevronLeft className="h-4 w-4" />
+            </Link>
+          </Button>
+          <h1 className="text-3xl font-bold tracking-tight">Customer Not Found</h1>
+        </div>
+      </div>
+    )
   }
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center gap-2">
         <Button variant="outline" size="icon" asChild>
-          <Link href={`/dashboard/customers/${params.customerId}`}>
+          <Link href={`/dashboard/customers/${customerId}`}>
             <ChevronLeft className="h-4 w-4" />
           </Link>
         </Button>
         <h1 className="text-3xl font-bold tracking-tight">Edit Customer</h1>
       </div>
 
-      <form onSubmit={handleSubmit}>
-        <Card>
-          <CardHeader>
-            <CardTitle>Personal Information</CardTitle>
-            <CardDescription>Update customer details.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="name">Full Name</Label>
-                <Input id="name" name="name" value={formData.name} onChange={handleChange} required />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="phone">Phone Number</Label>
-                <Input id="phone" name="phone" value={formData.phone} onChange={handleChange} required />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="idCard">ID Card Number</Label>
-                <Input id="idCard" name="idCard" value={formData.idCard} onChange={handleChange} required />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input id="email" name="email" type="email" value={formData.email} onChange={handleChange} required />
-              </div>
-              <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="address">Address</Label>
-                <Textarea
-                  id="address"
-                  name="address"
-                  value={formData.address}
-                  onChange={handleChange}
-                  rows={3}
-                  required
-                />
-              </div>
-            </div>
-          </CardContent>
-          <CardFooter className="flex justify-end gap-2">
+      <Card>
+        <CardHeader>
+          <CardTitle>Edit Customer Details</CardTitle>
+          <CardDescription>Update the customer's information below.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="fullName">Full Name</Label>
+            <Input
+              id="fullName"
+              value={formData.fullName}
+              onChange={handleInputChange}
+              placeholder="Enter customer's full name"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              type="email"
+              value={formData.email}
+              onChange={handleInputChange}
+              placeholder="Enter customer's email"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="address">Address</Label>
+            <Input
+              id="address"
+              value={formData.address}
+              onChange={handleInputChange}
+              placeholder="Enter customer's address"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2">
             <Button variant="outline" asChild>
-              <Link href={`/dashboard/customers/${params.customerId}`}>Cancel</Link>
+              <Link href={`/dashboard/customers/${customerId}`}>Cancel</Link>
             </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? (
-                <>Saving...</>
-              ) : (
-                <>
-                  <Save className="mr-2 h-4 w-4" />
-                  Save Changes
-                </>
-              )}
+            <Button onClick={handleSave} disabled={isSaving}>
+              {isSaving ? "Saving..." : "Save Changes"}
             </Button>
-          </CardFooter>
-        </Card>
-      </form>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }

@@ -1,9 +1,19 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
+import { useParams, useRouter } from "next/navigation"
 import Image from "next/image"
 import Link from "next/link"
 import { ChevronLeft } from "lucide-react"
+import { Skeleton } from "@/components/ui/skeleton"
+import { addDays } from "date-fns"
+import { DateRange, DayPicker } from "react-day-picker"
+import "react-day-picker/dist/style.css"
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns'
+import { DatePicker } from '@mui/x-date-pickers/DatePicker'
+import { TextField, Box, Typography, Paper, Grid } from '@mui/material'
+import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -11,40 +21,344 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Separator } from "@/components/ui/separator"
-import { DatePickerWithRange } from "@/components/date-range-picker"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import { cn } from "@/lib/utils"
+import { format } from "date-fns"
+import { CalendarIcon } from "lucide-react"
+import config from "../../../../../config"
+import { CustomerSearch } from "@/components/customer-search"
 
-// Mock data for a specific car
-const carData = {
-  id: 101,
-  model: "Toyota Corolla",
-  year: 2022,
-  color: "red",
-  registrationNumber: "ABC-123",
-  chassisNumber: "TC2022RED001",
-  engineNumber: "ENG2022001",
-  image: "/placeholder.svg?height=400&width=600",
-  available: true,
-  meterReading: 12500,
+interface CarDetails {
+  id: string
+  model: string
+  year: number
+  color: string
+  registrationNumber: string
+  chassisNumber: string
+  engineNumber: string
+  image: string
+  createdAt: string
+  updatedAt: string
 }
 
-// Mock data for drivers
-const drivers = [
-  { id: 1, name: "John Smith", image: "/placeholder.svg?height=100&width=100" },
-  { id: 2, name: "David Johnson", image: "/placeholder.svg?height=100&width=100" },
-  { id: 3, name: "Michael Brown", image: "/placeholder.svg?height=100&width=100" },
-]
+interface Driver {
+  id: string
+  name: string
+}
 
-export default function CarDetailPage({ params }: { params: { modelId: string; carId: string } }) {
-  const [selectedDriver, setSelectedDriver] = useState<number | null>(null)
+export default function CarDetailPage() {
+  const params = useParams()
+  const router = useRouter()
+  const [carDetails, setCarDetails] = useState<CarDetails | null>(null)
+  const [drivers, setDrivers] = useState<Driver[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [isDriversLoading, setIsDriversLoading] = useState(false)
+  const [driversError, setDriversError] = useState<string | null>(null)
+  const [isBooking, setIsBooking] = useState(false)
+  const [selectedDriver, setSelectedDriver] = useState<string | null>(null)
   const [tripType, setTripType] = useState("within-city")
   const [cityName, setCityName] = useState("")
   const [totalBill, setTotalBill] = useState(5000)
   const [advancePaid, setAdvancePaid] = useState(2000)
   const [discountPercentage, setDiscountPercentage] = useState(0)
   const [discountReference, setDiscountReference] = useState("")
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: new Date(),
+    to: addDays(new Date(), 7),
+  })
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null)
+  const [meterReading, setMeterReading] = useState(0)
+  const [customerDetails, setCustomerDetails] = useState({
+    name: "",
+    phone: "",
+    idCard: "",
+  })
+
+  useEffect(() => {
+    const fetchCarDetails = async () => {
+      try {
+        setIsLoading(true)
+        const token = localStorage.getItem("token")
+        
+        const response = await fetch(`${config.backendUrl}/cars/details/${params.carId}`, {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`,
+          },
+        })
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! Status: ${response.status}`)
+        }
+
+        const data = await response.json()
+        setCarDetails(data)
+      } catch (error) {
+        console.error("Error fetching car details:", error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    const fetchDrivers = async () => {
+      try {
+        setIsDriversLoading(true)
+        const token = localStorage.getItem("token")
+        
+        const response = await fetch(`${config.backendUrl}/drivers/names`, {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`,
+          },
+        })
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! Status: ${response.status}`)
+        }
+
+        const data = await response.json()
+        setDrivers(data)
+      } catch (error) {
+        console.error("Error fetching drivers:", error)
+      } finally {
+        setIsDriversLoading(false)
+      }
+    }
+
+    fetchCarDetails()
+    fetchDrivers()
+  }, [params.carId])
+
+  // Add new useEffect for fetching drivers when date range changes
+  useEffect(() => {
+    const fetchAvailableDrivers = async () => {
+      if (!dateRange?.from || !dateRange?.to) {
+        setDrivers([])
+        return
+      }
+
+      setIsDriversLoading(true)
+      setDriversError(null)
+      try {
+        const token = localStorage.getItem("token")
+        const response = await fetch(
+          `${config.backendUrl}/drivers/available?startDate=${format(dateRange.from, "yyyy-MM-dd")}&endDate=${format(dateRange.to, "yyyy-MM-dd")}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        )
+
+        if (!response.ok) {
+          const errorData = await response.json()
+          throw new Error(errorData.error || "Failed to fetch available drivers")
+        }
+
+        const data = await response.json()
+        setDrivers(data)
+      } catch (error) {
+        console.error("Error fetching available drivers:", error)
+        setDriversError(error instanceof Error ? error.message : "Failed to fetch available drivers")
+        setDrivers([])
+      } finally {
+        setIsDriversLoading(false)
+      }
+    }
+
+    fetchAvailableDrivers()
+  }, [dateRange])
 
   // Calculate remaining amount
   const remaining = totalBill - advancePaid - totalBill * (discountPercentage / 100)
+
+  const handleBookCar = async () => {
+    if (!selectedDriver) {
+      toast.error("Please select a driver")
+      return
+    }
+
+    if (!dateRange?.from || !dateRange?.to) {
+      toast.error("Please select a date range")
+      return
+    }
+
+    if (!meterReading) {
+      toast.error("Please enter meter reading")
+      return
+    }
+
+    if (!customerDetails.name || !customerDetails.idCard || !customerDetails.phone) {
+      toast.error("Please fill in all customer details")
+      return
+    }
+
+    setIsBooking(true)
+    try {
+      const response = await fetch(`${config.backendUrl}/bookings`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem("token")}`,
+        },
+        body: JSON.stringify({
+          carId: params.carId,
+          driverId: selectedDriver,
+          tripType,
+          cityName: tripType === "out-of-city" ? cityName : null,
+          startDate: dateRange.from,
+          endDate: dateRange.to,
+          meterReading: Number(meterReading),
+          totalBill,
+          advancePaid,
+          discountPercentage,
+          discountReference: discountPercentage > 0 ? discountReference : null,
+          customerName: customerDetails.name,
+          cellNumber: customerDetails.phone,
+          idCardNumber: customerDetails.idCard,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to book car")
+      }
+
+      toast.success("Car booked successfully!")
+      
+      // Redirect to bookings page after successful booking
+      setTimeout(() => {
+        router.push("/dashboard/bookings")
+      }, 2000)
+    } catch (error) {
+      console.error("Error booking car:", error)
+      toast.error("Failed to book car. Please try again.")
+    } finally {
+      setIsBooking(false)
+    }
+  }
+
+  const handleCustomerSelect = (customer: any) => {
+    setCustomerDetails({
+      name: customer.fullName,
+      phone: customer.phoneNumber,
+      idCard: customer.idCardNumber,
+    })
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col gap-6">
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-10 w-10" />
+          <Skeleton className="h-8 w-48" />
+        </div>
+
+        <div className="grid gap-6 md:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <Skeleton className="h-6 w-32" />
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Skeleton className="h-64 w-full" />
+              <div className="grid grid-cols-2 gap-4">
+                {Array.from({ length: 6 }).map((_, index) => (
+                  <div key={index} className="space-y-2">
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-6 w-full" />
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <Skeleton className="h-6 w-32" />
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {Array.from({ length: 3 }).map((_, index) => (
+                  <div key={index} className="space-y-2">
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-10 w-full" />
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <Skeleton className="h-6 w-32" />
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Skeleton className="h-4 w-24" />
+                <div className="space-y-2">
+                  {Array.from({ length: 3 }).map((_, index) => (
+                    <div key={index} className="flex items-center gap-2">
+                      <Skeleton className="h-4 w-4" />
+                      <Skeleton className="h-10 w-full" />
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+
+        <div className="grid gap-6 md:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <Skeleton className="h-6 w-32" />
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {Array.from({ length: 3 }).map((_, index) => (
+                <div key={index} className="space-y-2">
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-10 w-full" />
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <Skeleton className="h-6 w-32" />
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <div key={index} className="space-y-2">
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-10 w-full" />
+                </div>
+              ))}
+              <Skeleton className="h-10 w-full" />
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    )
+  }
+
+  if (!carDetails) {
+    return (
+      <div className="flex flex-col gap-6">
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="icon" asChild>
+            <Link href={`/dashboard/cars/${params.modelId}`}>
+              <ChevronLeft className="h-4 w-4" />
+            </Link>
+          </Button>
+          <h1 className="text-3xl font-bold tracking-tight">Car Not Found</h1>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -55,7 +369,7 @@ export default function CarDetailPage({ params }: { params: { modelId: string; c
           </Link>
         </Button>
         <h1 className="text-3xl font-bold tracking-tight">
-          Book {carData.model} ({carData.year})
+          Book {carDetails.model} ({carDetails.year})
         </h1>
       </div>
 
@@ -67,8 +381,8 @@ export default function CarDetailPage({ params }: { params: { modelId: string; c
           <CardContent className="space-y-4">
             <div className="relative h-64 w-full overflow-hidden rounded-md">
               <Image
-                src={carData.image || "/placeholder.svg"}
-                alt={`${carData.model} - ${carData.color}`}
+                src={carDetails.image || "/placeholder.svg"}
+                alt={`${carDetails.model} - ${carDetails.color}`}
                 fill
                 className="object-cover"
               />
@@ -76,34 +390,40 @@ export default function CarDetailPage({ params }: { params: { modelId: string; c
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Model</p>
-                <p>{carData.model}</p>
+                <p>{carDetails.model}</p>
               </div>
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Year</p>
-                <p>{carData.year}</p>
+                <p>{carDetails.year}</p>
               </div>
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Color</p>
                 <div className="flex items-center gap-2">
-                  <div className="h-4 w-4 rounded-full border" style={{ backgroundColor: carData.color }} />
-                  <span className="capitalize">{carData.color}</span>
+                  <div className="h-4 w-4 rounded-full border" style={{ backgroundColor: carDetails.color }} />
+                  <span className="capitalize">{carDetails.color}</span>
                 </div>
               </div>
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Registration</p>
-                <p>{carData.registrationNumber}</p>
+                <p>{carDetails.registrationNumber}</p>
               </div>
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Chassis Number</p>
-                <p>{carData.chassisNumber}</p>
+                <p>{carDetails.chassisNumber}</p>
               </div>
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Engine Number</p>
-                <p>{carData.engineNumber}</p>
+                <p>{carDetails.engineNumber}</p>
               </div>
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Meter Reading</p>
-                <p>{carData.meterReading} km</p>
+                <Input
+                  type="number"
+                  placeholder="Enter current meter reading"
+                  value={meterReading}
+                  onChange={(e) => setMeterReading(Number(e.target.value))}
+                  className="mt-1"
+                />
               </div>
             </div>
           </CardContent>
@@ -116,16 +436,38 @@ export default function CarDetailPage({ params }: { params: { modelId: string; c
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="fullName">Full Name</Label>
-                <Input id="fullName" placeholder="Enter customer's full name" />
+                <Label>Customer Search</Label>
+                <CustomerSearch onCustomerSelect={handleCustomerSelect} />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="cellNumber">Cell Number</Label>
-                <Input id="cellNumber" placeholder="Enter customer's cell number" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="idCardNumber">ID Card Number</Label>
-                <Input id="idCardNumber" placeholder="Enter customer's ID card number" />
+
+              <div className="grid grid-cols-1 gap-4 ">
+                <div className="space-y-2">
+                  <Label htmlFor="name">Full Name</Label>
+                  <Input
+                    id="name"
+                    value={customerDetails.name}
+                    onChange={(e) => setCustomerDetails({ ...customerDetails, name: e.target.value })}
+                    placeholder="Enter customer's full name"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="phone">Phone Number</Label>
+                  <Input
+                    id="phone"
+                    value={customerDetails.phone}
+                    onChange={(e) => setCustomerDetails({ ...customerDetails, phone: e.target.value })}
+                    placeholder="Enter customer's phone number"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="idCard">ID Card Number</Label>
+                  <Input
+                    id="idCard"
+                    value={customerDetails.idCard}
+                    onChange={(e) => setCustomerDetails({ ...customerDetails, idCard: e.target.value })}
+                    placeholder="Enter customer's ID card number"
+                  />
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -137,30 +479,36 @@ export default function CarDetailPage({ params }: { params: { modelId: string; c
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label>Select Driver</Label>
-                <RadioGroup
-                  value={selectedDriver?.toString()}
-                  onValueChange={(value) => setSelectedDriver(Number.parseInt(value))}
-                >
-                  <div className="grid gap-4">
-                    {drivers.map((driver) => (
-                      <div key={driver.id} className="flex items-center space-x-2">
-                        <RadioGroupItem value={driver.id.toString()} id={`driver-${driver.id}`} />
-                        <Label htmlFor={`driver-${driver.id}`} className="flex items-center gap-2 cursor-pointer">
-                          <div className="h-10 w-10 rounded-full overflow-hidden">
-                            <Image
-                              src={driver.image || "/placeholder.svg"}
-                              alt={driver.name}
-                              width={40}
-                              height={40}
-                              className="object-cover"
-                            />
-                          </div>
-                          <span>{driver.name}</span>
-                        </Label>
+                {isDriversLoading ? (
+                  <div className="space-y-2">
+                    {Array.from({ length: 3 }).map((_, index) => (
+                      <div key={index} className="flex items-center gap-2">
+                        <Skeleton className="h-4 w-4" />
+                        <Skeleton className="h-6 w-32" />
                       </div>
                     ))}
                   </div>
-                </RadioGroup>
+                ) : driversError ? (
+                  <div className="text-sm text-destructive">{driversError}</div>
+                ) : drivers.length === 0 ? (
+                  <div className="text-sm text-muted-foreground">No drivers available for selected dates</div>
+                ) : (
+                  <RadioGroup
+                    value={selectedDriver || ""}
+                    onValueChange={setSelectedDriver}
+                  >
+                    <div className="grid gap-4">
+                      {drivers.map((driver) => (
+                        <div key={driver.id} className="flex items-center space-x-2">
+                          <RadioGroupItem value={driver.id} id={`driver-${driver.id}`} />
+                          <Label htmlFor={`driver-${driver.id}`} className="cursor-pointer">
+                            {driver.name}
+                          </Label>
+                        </div>
+                      ))}
+                    </div>
+                  </RadioGroup>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -203,7 +551,45 @@ export default function CarDetailPage({ params }: { params: { modelId: string; c
 
             <div className="space-y-2">
               <Label>Trip Duration</Label>
-              <DatePickerWithRange className="w-full" />
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    id="date"
+                    variant={"outline"}
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !dateRange && "text-muted-foreground",
+                      !carDetails && "opacity-50 cursor-not-allowed"
+                    )}
+                    disabled={!carDetails}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {dateRange?.from ? (
+                      dateRange.to ? (
+                        <>
+                          {format(dateRange.from, "LLL dd, y")} -{" "}
+                          {format(dateRange.to, "LLL dd, y")}
+                        </>
+                      ) : (
+                        format(dateRange.from, "LLL dd, y")
+                      )
+                    ) : (
+                      <span>Pick a date</span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <DayPicker
+                    mode="range"
+                    defaultMonth={dateRange?.from}
+                    selected={dateRange}
+                    onSelect={setDateRange}
+                    numberOfMonths={2}
+                    disabled={(date) => date < new Date()}
+                    className="border rounded-md"
+                  />
+                </PopoverContent>
+              </Popover>
             </div>
           </CardContent>
         </Card>
@@ -260,7 +646,13 @@ export default function CarDetailPage({ params }: { params: { modelId: string; c
               <span className="font-bold text-lg">${remaining.toFixed(2)}</span>
             </div>
 
-            <Button className="w-full">Book Now</Button>
+            <Button 
+              className="w-full" 
+              onClick={handleBookCar}
+              disabled={isBooking}
+            >
+              {isBooking ? "Booking..." : "Book Now"}
+            </Button>
           </CardContent>
         </Card>
       </div>

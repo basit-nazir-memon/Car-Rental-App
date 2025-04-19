@@ -1,89 +1,137 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
+import { useParams, useSearchParams } from "next/navigation"
 import Image from "next/image"
 import Link from "next/link"
 import { ChevronLeft, Search } from "lucide-react"
+import { Skeleton } from "@/components/ui/skeleton"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import config from "../../../../config"
 
-// Mock data for specific cars of a model
-const carsByModel = {
-  "1": [
-    {
-      id: 101,
-      model: "Toyota Corolla",
-      year: 2022,
-      color: "red",
-      registrationNumber: "ABC-123",
-      chassisNumber: "TC2022RED001",
-      engineNumber: "ENG2022001",
-      image: "/placeholder.svg?height=200&width=300",
-      available: true,
-    },
-    {
-      id: 102,
-      model: "Toyota Corolla",
-      year: 2021,
-      color: "blue",
-      registrationNumber: "DEF-456",
-      chassisNumber: "TC2021BLU001",
-      engineNumber: "ENG2021001",
-      image: "/placeholder.svg?height=200&width=300",
-      available: true,
-    },
-    {
-      id: 103,
-      model: "Toyota Corolla",
-      year: 2020,
-      color: "white",
-      registrationNumber: "GHI-789",
-      chassisNumber: "TC2020WHT001",
-      engineNumber: "ENG2020001",
-      image: "/placeholder.svg?height=200&width=300",
-      available: true,
-    },
-    {
-      id: 104,
-      model: "Toyota Corolla",
-      year: 2019,
-      color: "black",
-      registrationNumber: "JKL-012",
-      chassisNumber: "TC2019BLK001",
-      engineNumber: "ENG2019001",
-      image: "/placeholder.svg?height=200&width=300",
-      available: false,
-    },
-    {
-      id: 105,
-      model: "Toyota Corolla",
-      year: 2018,
-      color: "silver",
-      registrationNumber: "MNO-345",
-      chassisNumber: "TC2018SLV001",
-      engineNumber: "ENG2018001",
-      image: "/placeholder.svg?height=200&width=300",
-      available: false,
-    },
-  ],
+interface CarInstance {
+  id: string
+  color: string
+  registrationNumber: string
+  chassisNumber: string
+  engineNumber: string
+  year: number
+  available: boolean
 }
 
-export default function CarModelPage({ params }: { params: { modelId: string } }) {
+interface CarModel {
+  id: number
+  name: string
+  image: string
+  availableColors: string[]
+  availableCount: number
+  totalCount: number
+  instances: CarInstance[]
+}
+
+export default function CarModelPage() {
+  const params = useParams()
+  const searchParams = useSearchParams()
   const [searchQuery, setSearchQuery] = useState("")
+  const [carModel, setCarModel] = useState<CarModel | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
 
-  // Get cars for this model
-  const cars = carsByModel[params.modelId as keyof typeof carsByModel] || []
+  useEffect(() => {
+    const fetchCarModel = async () => {
+      try {
+        setIsLoading(true)
+        const token = localStorage.getItem("token")
+        
+        let url = `${config.backendUrl}/cars/${params.modelId}`
+        const startDate = searchParams.get("startDate")
+        const endDate = searchParams.get("endDate")
+        
+        if (startDate && endDate) {
+          url += `?startDate=${startDate}&endDate=${endDate}`
+        }
+        
+        const response = await fetch(url, {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`,
+          },
+        })
 
-  // Filter cars based on search query
-  const filteredCars = cars.filter(
-    (car) =>
-      car.registrationNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      car.chassisNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      car.color.toLowerCase().includes(searchQuery.toLowerCase()),
-  )
+        if (!response.ok) {
+          throw new Error(`HTTP error! Status: ${response.status}`)
+        }
+
+        const data = await response.json()
+        setCarModel(data)
+        console.log(data)
+      } catch (error) {
+        console.error("Error fetching car model:", error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchCarModel()
+  }, [params.modelId, searchParams])
+
+  // Filter instances based on search query
+  const filteredInstances = carModel?.instances.filter(
+    (instance) =>
+      instance.registrationNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      instance.chassisNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      instance.color.toLowerCase().includes(searchQuery.toLowerCase()),
+  ) || []
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col gap-6">
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-10 w-10" />
+          <Skeleton className="h-8 w-48" />
+        </div>
+
+        <div className="relative">
+          <Skeleton className="h-10 w-full md:w-[300px]" />
+        </div>
+
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, index) => (
+            <Card key={index} className="overflow-hidden">
+              <Skeleton className="h-48 w-full" />
+              <CardContent className="p-4">
+                <div className="flex flex-col gap-1">
+                  <Skeleton className="h-6 w-3/4" />
+                  <Skeleton className="h-4 w-1/2" />
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-full" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  if (!carModel) {
+    return (
+      <div className="flex flex-col gap-6">
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="icon" asChild>
+            <Link href="/dashboard/cars">
+              <ChevronLeft className="h-4 w-4" />
+            </Link>
+          </Button>
+          <h1 className="text-3xl font-bold tracking-tight">Car Model Not Found</h1>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -93,7 +141,7 @@ export default function CarModelPage({ params }: { params: { modelId: string } }
             <ChevronLeft className="h-4 w-4" />
           </Link>
         </Button>
-        <h1 className="text-3xl font-bold tracking-tight">{cars.length > 0 ? cars[0].model : "Car Model"}</h1>
+        <h1 className="text-3xl font-bold tracking-tight">{carModel.name}</h1>
       </div>
 
       <div className="relative">
@@ -108,33 +156,33 @@ export default function CarModelPage({ params }: { params: { modelId: string } }
       </div>
 
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {filteredCars.map((car) => (
-          <Link href={`/dashboard/cars/${params.modelId}/${car.id}`} key={car.id}>
-            <Card className={`overflow-hidden transition-all hover:shadow-md ${!car.available ? "opacity-60" : ""}`}>
+        {filteredInstances.map((instance) => (
+          <Link href={`/dashboard/cars/${params.modelId}/${instance.id}`} key={instance.id}>
+            <Card className="overflow-hidden transition-all hover:shadow-md">
               <div className="relative h-48">
                 <Image
-                  src={car.image || "/placeholder.svg"}
-                  alt={`${car.model} - ${car.color}`}
+                  src={carModel.image || "/placeholder.svg"}
+                  alt={`${carModel.name} - ${instance.color}`}
                   fill
                   className="object-cover"
                 />
                 <div className="absolute bottom-2 left-2">
-                  <Badge variant={car.available ? "default" : "destructive"}>
-                    {car.available ? "Available" : "Not Available"}
+                  <Badge variant="default">
+                    {instance.available ? "Available" : "Booked"}
                   </Badge>
                 </div>
               </div>
               <CardContent className="p-4">
                 <div className="flex flex-col gap-1">
                   <h3 className="text-lg font-semibold">
-                    {car.model} ({car.year})
+                    {carModel.name} ({instance.year})
                   </h3>
                   <div className="flex items-center gap-2">
-                    <div className="h-4 w-4 rounded-full border" style={{ backgroundColor: car.color }} />
-                    <span className="text-sm capitalize">{car.color}</span>
+                    <div className="h-4 w-4 rounded-full border" style={{ backgroundColor: instance.color }} />
+                    <span className="text-sm capitalize">{instance.color}</span>
                   </div>
-                  <p className="text-sm text-muted-foreground">Reg: {car.registrationNumber}</p>
-                  <p className="text-sm text-muted-foreground">Chassis: {car.chassisNumber}</p>
+                  <p className="text-sm text-muted-foreground">Reg: {instance.registrationNumber}</p>
+                  <p className="text-sm text-muted-foreground">Chassis: {instance.chassisNumber}</p>
                 </div>
               </CardContent>
             </Card>

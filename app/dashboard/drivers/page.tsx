@@ -1,15 +1,28 @@
-"use client"
+"use client";
 
-import type React from "react"
+import type React from "react";
 
-import { useState } from "react"
-import { Search, UserPlus } from "lucide-react"
-import Image from "next/image"
+import { useEffect, useState } from "react";
+import { Loader2, Search, UserPlus } from "lucide-react";
+import Image from "next/image";
 
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -18,9 +31,12 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog"
-import { Label } from "@/components/ui/label"
-import { Badge } from "@/components/ui/badge"
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { toast, ToastContainer } from "react-toastify";
+import axios from "axios";
+import config from "../../../config";
 
 // Mock data for drivers
 const drivers = [
@@ -64,42 +80,152 @@ const drivers = [
     totalTrips: 56,
     image: "/placeholder.svg?height=100&width=100",
   },
-]
+];
 
 export default function DriversPage() {
-  const [searchQuery, setSearchQuery] = useState("")
+  const [searchQuery, setSearchQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const [drivers, setDrivers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
   const [newDriver, setNewDriver] = useState({
     name: "",
     idCard: "",
     address: "",
-    age: "",
-    image: null as File | null,
-  })
+    image:
+      "https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_960_720.png",
+    lisenceNumber: "",
+    phone: "",
+    status: "",
+  });
 
   // Filter drivers based on search query
   const filteredDrivers = drivers.filter(
-    (driver) => driver.name.toLowerCase().includes(searchQuery.toLowerCase()) || driver.idCard.includes(searchQuery),
-  )
+    (driver: any) =>
+      driver.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      driver.idCard.includes(searchQuery)
+  );
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { id, value, files } = e.target
+    const { id, value } = e.target;
+    setNewDriver((prev) => ({ ...prev, [id]: value }));
+  };
 
-    if (id === "image" && files && files.length > 0) {
-      setNewDriver((prev) => ({ ...prev, image: files[0] }))
-    } else {
-      setNewDriver((prev) => ({ ...prev, [id]: value }))
+  const fetchDrivers = async () => {
+    setLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+      const response = await axios.get(`${config.backendUrl}/drivers`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      setDrivers(response.data);
+    } catch (error) {
+      console.error("Error fetching drivers:", error);
+      toast.error("Error fetching drivers: " + error);
+    } finally {
+      setLoading(false);
     }
-  }
+  };
 
-  const handleAddDriver = () => {
-    // This would normally add the driver to the database
-    console.log("Adding driver:", newDriver)
-    // Reset form
-    setNewDriver({ name: "", idCard: "", address: "", age: "", image: null })
+  const handleAddDriver = async () => {
+    setUploading(true);
+    const token = localStorage.getItem("token");
+
+    try {
+      const response = await axios.post(
+        `${config.backendUrl}/drivers`,
+        newDriver,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      // Reset form
+      setNewDriver({
+        name: "",
+        idCard: "",
+        address: "",
+        lisenceNumber: "",
+        image:
+          "https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_960_720.png",
+        phone: "",
+        status: "",
+      });
+
+      fetchDrivers();
+
+      setOpen(false);
+
+      toast.success("Driver added successfully!");
+    } catch (error: any) {
+      console.error("Error adding driver:", error);
+      toast.error(error?.response?.data?.error);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleFileChange = async (event: any) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append("image", file);
+
+    try {
+      setUploading(true);
+      const token = localStorage.getItem("token");
+
+      const response = await axios.post(
+        `${config.backendUrl}/upload-image`,
+        formData,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "multipart/form-data",
+          },
+        }
+      );
+
+      setNewDriver((prev) => ({
+        ...prev,
+        image: response.data.image_url, // Save image URL in state
+      }));
+
+      toast.success("Image uploaded successfully!");
+    } catch (error: any) {
+      console.error("Error uploading image:", error);
+      toast.error(error?.response?.data?.error || "Failed to upload image.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDrivers();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="flex flex-col items-center">
+          <Loader2 className="h-10 w-10 animate-spin text-gray-500" />
+          <p className="mt-2 text-gray-600 text-lg font-medium">
+            Loading drivers...
+          </p>
+        </div>
+      </div>
+    );
   }
 
   return (
     <div className="flex flex-col gap-6">
+      <ToastContainer />
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-3xl font-bold tracking-tight">Drivers</h1>
         <Dialog>
@@ -112,7 +238,9 @@ export default function DriversPage() {
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Add New Driver</DialogTitle>
-              <DialogDescription>Enter the driver details below to add them to the system.</DialogDescription>
+              <DialogDescription>
+                Enter the driver details below to add them to the system.
+              </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
@@ -124,14 +252,25 @@ export default function DriversPage() {
                   placeholder="Enter driver's full name"
                 />
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="idCard">ID Card Number (CNIC)</Label>
-                <Input
-                  id="idCard"
-                  value={newDriver.idCard}
-                  onChange={handleInputChange}
-                  placeholder="Enter driver's ID card number"
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="idCard">ID Card Number</Label>
+                  <Input
+                    id="idCard"
+                    value={newDriver.idCard}
+                    onChange={handleInputChange}
+                    placeholder="Enter driver's CNIC number"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="phone">Phone Number</Label>
+                  <Input
+                    id="phone"
+                    value={newDriver.phone}
+                    onChange={handleInputChange}
+                    placeholder="Enter driver's Phone number"
+                  />
+                </div>
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="address">Address</Label>
@@ -143,22 +282,50 @@ export default function DriversPage() {
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="age">Age</Label>
+                <Label htmlFor="lisenceNumber">Lisence Number</Label>
                 <Input
-                  id="age"
-                  type="number"
-                  value={newDriver.age}
+                  id="lisenceNumber"
+                  value={newDriver.lisenceNumber}
                   onChange={handleInputChange}
-                  placeholder="Enter age"
+                  placeholder="Enter driver's lisence number"
                 />
               </div>
+
               <div className="grid gap-2">
-                <Label htmlFor="image">Driver's Picture</Label>
-                <Input id="image" type="file" accept="image/*" onChange={handleInputChange} />
+                <Label htmlFor="profilePicture">Profile Picture</Label>
+
+                <div style={{ display: "flex" }}>
+                  <div className="w-11 h-10 rounded-full overflow-hidden border-2 border-gray-300 mb-2 mr-2">
+                    {uploading ? (
+                      <div className="flex items-center justify-center">
+                        <Loader2 className="animate-spin h-5 w-5 text-gray-500" />
+                      </div>
+                    ) : (
+                      <img
+                        src={newDriver.image}
+                        alt="Profile"
+                        className="w-full h-full object-cover"
+                      />
+                    )}
+                  </div>
+                  <Input
+                    id="profilePicture"
+                    type="file"
+                    onChange={handleFileChange}
+                    accept="image/*"
+                  />
+                </div>
               </div>
+              {/* </div> */}
             </div>
             <DialogFooter>
-              <Button onClick={handleAddDriver}>Add Driver</Button>
+              <Button onClick={handleAddDriver} disabled={uploading}>
+                {uploading ? (
+                  <Loader2 className="animate-spin h-4 w-4 mr-2" />
+                ) : (
+                  "Add Driver"
+                )}
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -178,7 +345,9 @@ export default function DriversPage() {
       <Card>
         <CardHeader>
           <CardTitle>Driver List</CardTitle>
-          <CardDescription>Manage your drivers and view their trip history.</CardDescription>
+          <CardDescription>
+            Manage your drivers and view their trip history.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -186,14 +355,12 @@ export default function DriversPage() {
               <TableRow>
                 <TableHead>Driver</TableHead>
                 <TableHead>ID Card</TableHead>
-                <TableHead>Age</TableHead>
+                <TableHead>Liscence Number</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Total Trips</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredDrivers.map((driver) => (
+              {filteredDrivers.map((driver: any) => (
                 <TableRow key={driver.id}>
                   <TableCell>
                     <div className="flex items-center gap-3">
@@ -208,22 +375,24 @@ export default function DriversPage() {
                       </div>
                       <div>
                         <div className="font-medium">{driver.name}</div>
-                        <div className="text-sm text-muted-foreground truncate max-w-[200px]">{driver.address}</div>
+                        <div className="text-sm text-muted-foreground truncate max-w-[200px]">
+                          {driver.address}
+                        </div>
                       </div>
                     </div>
                   </TableCell>
                   <TableCell>{driver.idCard}</TableCell>
-                  <TableCell>{driver.age}</TableCell>
+                  <TableCell>{driver.lisenceNumber}</TableCell>
                   <TableCell>
-                    <Badge variant={driver.status === "available" ? "default" : "secondary"}>
-                      {driver.status === "available" ? "Available" : "On Trip"}
+                    <Badge
+                      variant={
+                        driver.status === "available" ? "default" : "secondary"
+                      }
+                    >
+                      {driver.status === "available"
+                        ? "Available"
+                        : "Not Available"}
                     </Badge>
-                  </TableCell>
-                  <TableCell>{driver.totalTrips}</TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="outline" size="sm">
-                      View Details
-                    </Button>
                   </TableCell>
                 </TableRow>
               ))}
@@ -232,6 +401,5 @@ export default function DriversPage() {
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }
-

@@ -1,232 +1,220 @@
 "use client"
 
-import { useState } from "react"
-import { Search } from "lucide-react"
+import { useState, useEffect } from "react"
+import { Search, Calendar, Car, User, Clock, DollarSign } from "lucide-react"
 import { format } from "date-fns"
-
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Skeleton } from "@/components/ui/skeleton"
+import config from "../../../config"
+import Link from "next/link"
 
-// Mock data for bookings
-const bookings = [
-  {
-    id: 1,
-    carModel: "Toyota Corolla",
-    carYear: 2022,
-    registrationNumber: "ABC-123",
-    customerName: "John Doe",
-    customerIdCard: "12345-6789012-3",
-    driverName: "David Johnson",
-    startDate: new Date(2023, 2, 15),
-    endDate: new Date(2023, 2, 18),
-    status: "active",
-  },
-  {
-    id: 2,
-    carModel: "Honda Civic",
-    carYear: 2021,
-    registrationNumber: "DEF-456",
-    customerName: "Jane Smith",
-    customerIdCard: "98765-4321098-7",
-    driverName: "Michael Brown",
-    startDate: new Date(2023, 2, 10),
-    endDate: new Date(2023, 2, 20),
-    status: "active",
-  },
-  {
-    id: 3,
-    carModel: "Suzuki Swift",
-    carYear: 2020,
-    registrationNumber: "GHI-789",
-    customerName: "Robert Williams",
-    customerIdCard: "45678-9012345-6",
-    driverName: "John Smith",
-    startDate: new Date(2023, 1, 25),
-    endDate: new Date(2023, 2, 5),
-    status: "completed",
-  },
-  {
-    id: 4,
-    carModel: "Nissan Altima",
-    carYear: 2019,
-    registrationNumber: "JKL-012",
-    customerName: "Emily Johnson",
-    customerIdCard: "78901-2345678-9",
-    driverName: "David Johnson",
-    startDate: new Date(2023, 1, 15),
-    endDate: new Date(2023, 1, 20),
-    status: "completed",
-  },
-]
+interface Booking {
+  id: string
+  carModel: string
+  carYear: number
+  registrationNumber: string
+  customerName: string
+  customerIdCard: string
+  driverName: string
+  startDate: string
+  endDate: string
+  status: string
+  tripType: string
+  totalBill: number
+  advancePaid: number
+  remainingAmount: number
+  meterReading: number
+  startTime: string
+  endTime: string | null
+}
 
 export default function BookingsPage() {
+  const [bookings, setBookings] = useState<Booking[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
-  const [activeTab, setActiveTab] = useState("active")
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth().toString())
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString())
+  const [statusFilter, setStatusFilter] = useState<string>("all")
 
-  // Filter bookings based on active tab and search query
-  const filteredBookings = bookings.filter((booking) => {
-    const matchesTab = activeTab === "active" ? booking.status === "active" : booking.status === "completed"
+  useEffect(() => {
+    fetchBookings()
+  }, [statusFilter])
 
-    const matchesSearch =
-      booking.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      booking.customerIdCard.includes(searchQuery) ||
-      booking.registrationNumber.toLowerCase().includes(searchQuery.toLowerCase())
+  const fetchBookings = async () => {
+    try {
+      setIsLoading(true)
+      const token = localStorage.getItem("token")
+      const url = statusFilter === "all" 
+        ? `${config.backendUrl}/bookings`
+        : `${config.backendUrl}/bookings/status/${statusFilter}`
+      
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
 
-    return matchesTab && matchesSearch
-  })
+      if (!response.ok) {
+        throw new Error("Failed to fetch bookings")
+      }
+
+      const data = await response.json()
+      setBookings(data.bookings)
+    } catch (error) {
+      console.error("Error fetching bookings:", error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const filteredBookings = bookings?.filter((booking) =>
+    booking.customerName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    booking.driverName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    booking.carModel?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    booking.registrationNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    booking.customerIdCard?.includes(searchQuery)
+  ) || [];
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "active":
+        return <Badge variant="default">Active</Badge>
+      case "completed":
+        return <Badge variant="secondary">Completed</Badge>
+      case "cancelled":
+        return <Badge variant="destructive">Cancelled</Badge>
+      default:
+        return <Badge variant="outline">{status}</Badge>
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <Skeleton className="h-9 w-48" />
+          <Skeleton className="h-10 w-32" />
+        </div>
+
+        <div className="relative">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Skeleton className="h-10 w-full md:w-[300px]" />
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, index) => (
+            <Card key={index}>
+              <CardHeader>
+                <Skeleton className="h-6 w-32" />
+                <Skeleton className="h-4 w-24" />
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="space-y-2">
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-6 w-full" />
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-3xl font-bold tracking-tight">Bookings</h1>
-      </div>
-
-      <Tabs defaultValue="active" onValueChange={setActiveTab}>
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <TabsList>
-            <TabsTrigger value="active">Active</TabsTrigger>
-            <TabsTrigger value="history">History</TabsTrigger>
-          </TabsList>
-
-          {activeTab === "history" && (
             <div className="flex gap-2">
-              <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                <SelectTrigger className="w-[120px]">
-                  <SelectValue placeholder="Month" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="0">January</SelectItem>
-                  <SelectItem value="1">February</SelectItem>
-                  <SelectItem value="2">March</SelectItem>
-                  <SelectItem value="3">April</SelectItem>
-                  <SelectItem value="4">May</SelectItem>
-                  <SelectItem value="5">June</SelectItem>
-                  <SelectItem value="6">July</SelectItem>
-                  <SelectItem value="7">August</SelectItem>
-                  <SelectItem value="8">September</SelectItem>
-                  <SelectItem value="9">October</SelectItem>
-                  <SelectItem value="10">November</SelectItem>
-                  <SelectItem value="11">December</SelectItem>
-                </SelectContent>
-              </Select>
-
-              <Select value={selectedYear} onValueChange={setSelectedYear}>
-                <SelectTrigger className="w-[100px]">
-                  <SelectValue placeholder="Year" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="2023">2023</SelectItem>
-                  <SelectItem value="2022">2022</SelectItem>
-                  <SelectItem value="2021">2021</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          )}
+          <Button
+            variant={statusFilter === "all" ? "default" : "outline"}
+            onClick={() => setStatusFilter("all")}
+          >
+            All
+          </Button>
+          <Button
+            variant={statusFilter === "active" ? "default" : "outline"}
+            onClick={() => setStatusFilter("active")}
+          >
+            Active
+          </Button>
+          <Button
+            variant={statusFilter === "completed" ? "default" : "outline"}
+            onClick={() => setStatusFilter("completed")}
+          >
+            Completed
+          </Button>
+          <Button
+            variant={statusFilter === "cancelled" ? "default" : "outline"}
+            onClick={() => setStatusFilter("cancelled")}
+          >
+            Cancelled
+          </Button>
+        </div>
         </div>
 
-        <div className="relative my-4">
+      <div className="relative">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             type="search"
-            placeholder="Search by customer name, ID card, or registration number..."
-            className="w-full bg-background pl-8"
+          placeholder="Search by customer name, registration number, or ID card..."
+          className="w-full bg-background pl-8 md:w-[300px]"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
 
-        <TabsContent value="active" className="space-y-4">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Car</TableHead>
-                <TableHead>Customer</TableHead>
-                <TableHead>Driver</TableHead>
-                <TableHead>Start Date</TableHead>
-                <TableHead>End Date</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {filteredBookings.map((booking) => (
-                <TableRow key={booking.id}>
-                  <TableCell>
-                    <div className="font-medium">{booking.carModel}</div>
-                    <div className="text-sm text-muted-foreground">{booking.registrationNumber}</div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="font-medium">{booking.customerName}</div>
-                    <div className="text-sm text-muted-foreground">{booking.customerIdCard}</div>
-                  </TableCell>
-                  <TableCell>{booking.driverName}</TableCell>
-                  <TableCell>{format(booking.startDate, "MMM dd, yyyy")}</TableCell>
-                  <TableCell>{format(booking.endDate, "MMM dd, yyyy")}</TableCell>
-                  <TableCell>
-                    <Badge variant={booking.status === "active" ? "default" : "secondary"}>
-                      {booking.status === "active" ? "Active" : "Completed"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="outline" size="sm" asChild>
-                      <a href={`/dashboard/bookings/${booking.id}`}>View</a>
+          <Card key={booking.id}>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg">{booking.carModel} ({booking.carYear})</CardTitle>
+                {getStatusBadge(booking.status)}
+              </div>
+              <p className="text-sm text-muted-foreground">{booking.registrationNumber}</p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <User className="h-4 w-4" />
+                  <span>{booking.customerName}</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Car className="h-4 w-4" />
+                  <span>{booking.driverName}</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Calendar className="h-4 w-4" />
+                  <span>
+                    {format(new Date(booking.startDate), "dd/MM/yyyy")} -{" "}
+                    {format(new Date(booking.endDate), "dd/MM/yyyy")}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Clock className="h-4 w-4" />
+                  <span>{booking.startTime}</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <DollarSign className="h-4 w-4" />
+                  <span>Total: {booking.totalBill} | Paid: {booking.advancePaid} | Remaining: {booking.remainingAmount}</span>
+                </div>
+                <div className="pt-2">
+                  <Button variant="outline" size="sm" className="w-full" asChild>
+                    <Link href={`/dashboard/bookings/${booking.id}`}>
+                      View Booking
+                    </Link>
                     </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TabsContent>
-
-        <TabsContent value="history" className="space-y-4">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Car</TableHead>
-                <TableHead>Customer</TableHead>
-                <TableHead>Driver</TableHead>
-                <TableHead>Start Date</TableHead>
-                <TableHead>End Date</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredBookings.map((booking) => (
-                <TableRow key={booking.id}>
-                  <TableCell>
-                    <div className="font-medium">{booking.carModel}</div>
-                    <div className="text-sm text-muted-foreground">{booking.registrationNumber}</div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="font-medium">{booking.customerName}</div>
-                    <div className="text-sm text-muted-foreground">{booking.customerIdCard}</div>
-                  </TableCell>
-                  <TableCell>{booking.driverName}</TableCell>
-                  <TableCell>{format(booking.startDate, "MMM dd, yyyy")}</TableCell>
-                  <TableCell>{format(booking.endDate, "MMM dd, yyyy")}</TableCell>
-                  <TableCell>
-                    <Badge variant={booking.status === "active" ? "default" : "secondary"}>
-                      {booking.status === "active" ? "Active" : "Completed"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="outline" size="sm" asChild>
-                      <a href={`/dashboard/bookings/${booking.id}`}>View</a>
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TabsContent>
-      </Tabs>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
     </div>
   )
 }

@@ -1,121 +1,288 @@
-"use client"
+"use client";
 
-import type React from "react"
+import type React from "react";
+import { useState, useEffect } from "react";
+import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
+import { CalendarIcon, ChevronLeft, Save, ChevronRight, X } from "lucide-react";
+import { format } from "date-fns";
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
+import { DayPicker, DateRange } from "react-day-picker";
+import type { DayPickerProps } from "react-day-picker";
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
-import Link from "next/link"
-import { ChevronLeft, Save } from "lucide-react"
-
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { DatePickerWithRange } from "@/components/date-range-picker"
-import { Separator } from "@/components/ui/separator"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-
-// Mock data for a specific booking
-const bookingData = {
-  id: 1,
-  status: "active",
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Separator } from "@/components/ui/separator";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
+import config from "../../../../../config";
+interface Booking {
+  id: string;
+  status: string;
   customer: {
-    id: 1,
-    name: "John Doe",
-    phone: "+92 300 1234567",
-    idCard: "12345-6789012-3",
-  },
+    id: string;
+    name: string;
+    phone: string;
+    idCard: string;
+  };
   car: {
-    id: 1,
-    model: "Toyota Corolla",
-    year: 2022,
-    color: "red",
-    registrationNumber: "ABC-123",
-    meterReading: 12500,
-  },
-  driver: {
-    id: 1,
-    name: "David Johnson",
-    phone: "+92 301 2345678",
-    idCard: "23456-7890123-4",
-  },
+    id: string;
+    model: string;
+    year: number;
+    color: string;
+    registrationNumber: string;
+    meterReading: number;
+  };
   trip: {
-    type: "within-city",
-    city: "",
-    startDate: new Date(2023, 2, 15),
-    endDate: new Date(2023, 2, 18),
-  },
+    type: string;
+    city: string;
+    startDate: string;
+    endDate: string;
+    startTime: string;
+  };
   billing: {
-    totalAmount: 15000,
-    advancePaid: 5000,
-    discount: 0,
-    discountReference: "",
-    remaining: 10000,
-  },
+    totalAmount: number;
+    advancePaid: number;
+    discount: number;
+    discountReference: string;
+    remaining: number;
+  };
 }
 
-// Mock data for available drivers
-const availableDrivers = [
-  { id: 1, name: "David Johnson" },
-  { id: 2, name: "Michael Brown" },
-  { id: 3, name: "John Smith" },
-]
-
-export default function EditBookingPage({ params }: { params: { bookingId: string } }) {
-  const router = useRouter()
+export default function EditBookingPage({
+  params,
+}: {
+  params: { bookingId: string };
+}) {
+  const router = useRouter();
+  const { bookingId } = useParams();
+  const [bookingData, setBookingData] = useState<Booking | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
-    tripType: bookingData.trip.type,
-    city: bookingData.trip.city,
+    tripType: "",
+    city: "",
     dateRange: {
-      from: bookingData.trip.startDate,
-      to: bookingData.trip.endDate,
+      from: new Date() as Date | undefined,
+      to: new Date() as Date | undefined,
     },
-    driverId: bookingData.driver.id.toString(),
-    totalAmount: bookingData.billing.totalAmount.toString(),
-    advancePaid: bookingData.billing.advancePaid.toString(),
-    discount: bookingData.billing.discount.toString(),
-    discountReference: bookingData.billing.discountReference,
-    meterReading: bookingData.car.meterReading.toString(),
-  })
-  const [isSubmitting, setIsSubmitting] = useState(false)
+    totalAmount: "",
+    advancePaid: "",
+    discount: "",
+    discountReference: "",
+    meterReading: "",
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem("token");
+    return {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    };
+  };
+
+  useEffect(() => {
+    const fetchBookingData = async () => {
+      try {
+        const response = await fetch(`${config.backendUrl}/bookings/${bookingId}/edit`, {
+          headers: getAuthHeaders(),
+        });
+        if (!response.ok) {
+          throw new Error("Failed to fetch booking data");
+        }
+        const data = await response.json();
+        setBookingData(data);
+
+        // Set initial form data
+        setFormData({
+          tripType: data.trip.type,
+          city: data.trip.city,
+          dateRange: {
+            from: new Date(data.trip.startDate) as Date | undefined,
+            to: new Date(data.trip.endDate) as Date | undefined,
+          },
+          totalAmount: data.billing.totalAmount.toString(),
+          advancePaid: data.billing.advancePaid.toString(),
+          discount: data.billing.discount.toString(),
+          discountReference: data.billing.discountReference,
+          meterReading: data.car.meterReading.toString(),
+        });
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "An error occurred");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchBookingData();
+  }, [bookingId]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target
-    setFormData((prev) => ({ ...prev, [name]: value }))
-  }
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
 
-  const handleDateRangeChange = (range: { from: Date; to: Date }) => {
-    setFormData((prev) => ({ ...prev, dateRange: range }))
-  }
+  const handleDateRangeChange = (range: DateRange | undefined) => {
+    if (range) {
+      setFormData((prev) => ({
+        ...prev,
+        dateRange: {
+          from: range.from,
+          to: range.to,
+        },
+      }));
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsSubmitting(true)
+    e.preventDefault();
+    setIsSubmitting(true);
 
     try {
-      // This would normally be a fetch to your backend API
-      // For demo purposes, we'll simulate a successful update
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      const response = await fetch(`${config.backendUrl}/bookings/${bookingId}`, {
+        method: "PATCH",
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          tripType: formData.tripType,
+          cityName: formData.city,
+          startDate: formData.dateRange.from,
+          endDate: formData.dateRange.to,
+          meterReading: Number(formData.meterReading),
+          totalBill: Number(formData.totalAmount),
+          advancePaid: Number(formData.advancePaid),
+          discountPercentage: Number(formData.discount),
+          discountReference: formData.discountReference,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to update booking");
+      }
 
       // Redirect back to booking details page
-      router.push(`/dashboard/bookings/${params.bookingId}`)
+      router.push(`/dashboard/bookings/${bookingId}`);
     } catch (error) {
-      console.error("Error updating booking:", error)
+      console.error("Error updating booking:", error);
+      setError("Failed to update booking. Please try again.");
     } finally {
-      setIsSubmitting(false)
+      setIsSubmitting(false);
     }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col gap-6">
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="icon" asChild>
+            <Link href={`/dashboard/bookings/${bookingId}`}>
+              <ChevronLeft className="h-4 w-4" />
+            </Link>
+          </Button>
+          <h1 className="text-3xl font-bold tracking-tight">
+            Edit Booking #{bookingId}
+          </h1>
+        </div>
+        <div className="space-y-4">
+          <div className="h-8 w-48 animate-pulse rounded-md bg-muted" />
+          <div className="grid gap-6 md:grid-cols-2">
+            <div className="space-y-4">
+              <div className="h-8 w-full animate-pulse rounded-md bg-muted" />
+              <div className="h-8 w-full animate-pulse rounded-md bg-muted" />
+              <div className="h-8 w-full animate-pulse rounded-md bg-muted" />
+            </div>
+            <div className="space-y-4">
+              <div className="h-8 w-full animate-pulse rounded-md bg-muted" />
+              <div className="h-8 w-full animate-pulse rounded-md bg-muted" />
+              <div className="h-8 w-full animate-pulse rounded-md bg-muted" />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col gap-6">
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="icon" asChild>
+            <Link href={`/dashboard/bookings/${bookingId}`}>
+              <ChevronLeft className="h-4 w-4" />
+            </Link>
+          </Button>
+          <h1 className="text-3xl font-bold tracking-tight">
+            Edit Booking #{bookingId}
+          </h1>
+        </div>
+        <div className="rounded-lg border border-destructive bg-destructive/10 p-4 text-destructive">
+          {error}
+        </div>
+      </div>
+    );
+  }
+
+  if (!bookingData) {
+    return (
+      <div className="flex flex-col gap-6">
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="icon" asChild>
+            <Link href={`/dashboard/bookings/${bookingId}`}>
+              <ChevronLeft className="h-4 w-4" />
+            </Link>
+          </Button>
+          <h1 className="text-3xl font-bold tracking-tight">
+            Edit Booking #{bookingId}
+          </h1>
+        </div>
+        <div className="rounded-lg border p-4 text-center">
+          Booking not found
+        </div>
+      </div>
+    );
   }
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center gap-2">
         <Button variant="outline" size="icon" asChild>
-          <Link href={`/dashboard/bookings/${params.bookingId}`}>
+          <Link href={`/dashboard/bookings/${bookingId}`}>
             <ChevronLeft className="h-4 w-4" />
           </Link>
         </Button>
-        <h1 className="text-3xl font-bold tracking-tight">Edit Booking #{params.bookingId}</h1>
+        <h1 className="text-3xl font-bold tracking-tight">
+          Edit Booking #{bookingId}
+        </h1>
       </div>
 
       <form onSubmit={handleSubmit}>
@@ -130,7 +297,9 @@ export default function EditBookingPage({ params }: { params: { bookingId: strin
                 <Label>Trip Type</Label>
                 <RadioGroup
                   value={formData.tripType}
-                  onValueChange={(value) => setFormData((prev) => ({ ...prev, tripType: value }))}
+                  onValueChange={(value) =>
+                    setFormData((prev) => ({ ...prev, tripType: value }))
+                  }
                   className="flex flex-col space-y-1"
                 >
                   <div className="flex items-center space-x-2">
@@ -163,26 +332,31 @@ export default function EditBookingPage({ params }: { params: { bookingId: strin
 
               <div className="space-y-2">
                 <Label>Trip Duration</Label>
-                <DatePickerWithRange date={formData.dateRange} setDate={handleDateRangeChange} />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="driverId">Driver</Label>
-                <Select
-                  value={formData.driverId}
-                  onValueChange={(value) => setFormData((prev) => ({ ...prev, driverId: value }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a driver" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableDrivers.map((driver) => (
-                      <SelectItem key={driver.id} value={driver.id.toString()}>
-                        {driver.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="relative">
+                  <DatePicker
+                    selectsRange={true}
+                    startDate={formData.dateRange?.from}
+                    endDate={formData.dateRange?.to}
+                    onChange={(update) => {
+                      if (update) {
+                        setFormData((prev) => ({
+                          ...prev,
+                          dateRange: {
+                            from: update[0] || undefined,
+                            to: update[1] || undefined,
+                          },
+                        }));
+                      }
+                    }}
+                    monthsShown={2}
+                    minDate={new Date()}
+                    dateFormat="MMM dd, yyyy"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    placeholderText="Select date range"
+                    showPopperArrow={false}
+                    popperPlacement="bottom-start"
+                  />
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -254,7 +428,9 @@ export default function EditBookingPage({ params }: { params: { bookingId: strin
 
               <div className="flex justify-between">
                 <p className="font-medium">Remaining Amount</p>
-                <p className="font-bold text-lg">${Number(formData.totalAmount) - Number(formData.advancePaid)}</p>
+                <p className="font-bold text-lg">
+                  ${(Number(formData.totalAmount) * (100 - Number(formData.discount)) / 100) - Number(formData.advancePaid) }
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -262,7 +438,7 @@ export default function EditBookingPage({ params }: { params: { bookingId: strin
 
         <div className="mt-6 flex justify-end gap-2">
           <Button variant="outline" asChild>
-            <Link href={`/dashboard/bookings/${params.bookingId}`}>Cancel</Link>
+            <Link href={`/dashboard/bookings/${bookingId}`}>Back</Link>
           </Button>
           <Button type="submit" disabled={isSubmitting}>
             {isSubmitting ? (
@@ -276,7 +452,7 @@ export default function EditBookingPage({ params }: { params: { bookingId: strin
           </Button>
         </div>
       </form>
-    </div>
-  )
-}
 
+    </div>
+  );
+}

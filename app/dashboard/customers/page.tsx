@@ -1,11 +1,10 @@
 "use client"
 
 import type React from "react"
-
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Search, UserPlus } from "lucide-react"
 import Link from "next/link"
-
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -20,52 +19,23 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
+import { Skeleton } from "@/components/ui/skeleton"
+import config from "../../../config"
+import { format } from "date-fns"
 
-// Mock data for customers
-const customers = [
-  {
-    id: 1,
-    name: "John Doe",
-    phone: "+92 300 1234567",
-    idCard: "12345-6789012-3",
-    totalBookings: 5,
-    lastBooking: "2023-03-15",
-  },
-  {
-    id: 2,
-    name: "Jane Smith",
-    phone: "+92 301 2345678",
-    idCard: "98765-4321098-7",
-    totalBookings: 3,
-    lastBooking: "2023-02-20",
-  },
-  {
-    id: 3,
-    name: "Robert Williams",
-    phone: "+92 302 3456789",
-    idCard: "45678-9012345-6",
-    totalBookings: 2,
-    lastBooking: "2023-01-10",
-  },
-  {
-    id: 4,
-    name: "Emily Johnson",
-    phone: "+92 303 4567890",
-    idCard: "78901-2345678-9",
-    totalBookings: 1,
-    lastBooking: "2022-12-05",
-  },
-  {
-    id: 5,
-    name: "Michael Brown",
-    phone: "+92 304 5678901",
-    idCard: "23456-7890123-4",
-    totalBookings: 4,
-    lastBooking: "2023-03-01",
-  },
-]
+interface Customer {
+  _id: string
+  fullName: string
+  phoneNumber: string
+  idCardNumber: string
+  bookingCount: number
+  lastBookingDate: string
+}
 
 export default function CustomersPage() {
+  const [customers, setCustomers] = useState<Customer[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [isAdding, setIsAdding] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [newCustomer, setNewCustomer] = useState({
     name: "",
@@ -73,12 +43,40 @@ export default function CustomersPage() {
     idCard: "",
   })
 
+  useEffect(() => {
+    fetchCustomers()
+  }, [])
+
+  const fetchCustomers = async () => {
+    try {
+      setIsLoading(true)
+      const token = localStorage.getItem("token")
+      const response = await fetch(`${config.backendUrl}/customers`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch customers")
+      }
+
+      const data = await response.json()
+      setCustomers(data)
+    } catch (error) {
+      console.error("Error fetching customers:", error)
+      toast.error("Failed to fetch customers")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   // Filter customers based on search query
   const filteredCustomers = customers.filter(
     (customer) =>
-      customer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      customer.phone.includes(searchQuery) ||
-      customer.idCard.includes(searchQuery),
+      customer.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      customer.phoneNumber.includes(searchQuery) ||
+      customer.idCardNumber.includes(searchQuery),
   )
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -86,11 +84,79 @@ export default function CustomersPage() {
     setNewCustomer((prev) => ({ ...prev, [id]: value }))
   }
 
-  const handleAddCustomer = () => {
-    // This would normally add the customer to the database
-    console.log("Adding customer:", newCustomer)
-    // Reset form
-    setNewCustomer({ name: "", phone: "", idCard: "" })
+  const handleAddCustomer = async () => {
+    if (!newCustomer.name || !newCustomer.phone || !newCustomer.idCard) {
+      toast.error("All fields are required")
+      return
+    }
+
+    setIsAdding(true)
+    try {
+      const token = localStorage.getItem("token")
+      const response = await fetch(`${config.backendUrl}/customers`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          fullName: newCustomer.name,
+          phoneNumber: newCustomer.phone,
+          idCardNumber: newCustomer.idCard
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        if (response.status === 400) {
+          toast.error(data.error || "Failed to add customer")
+        } else {
+          throw new Error("Failed to add customer")
+        }
+        return
+      }
+
+      toast.success("Customer added successfully")
+      setNewCustomer({ name: "", phone: "", idCard: "" })
+      fetchCustomers() // Refresh the list
+    } catch (error) {
+      console.error("Error adding customer:", error)
+      toast.error("Failed to add customer. Please try again.")
+    } finally {
+      setIsAdding(false)
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <Skeleton className="h-9 w-48" />
+          <Skeleton className="h-10 w-32" />
+        </div>
+
+        <div className="relative">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Skeleton className="h-10 w-full md:w-[300px]" />
+        </div>
+
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-6 w-32" />
+            <Skeleton className="h-4 w-64" />
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <Skeleton className="h-10 w-full" />
+              {Array.from({ length: 5 }).map((_, index) => (
+                <Skeleton key={index} className="h-12 w-full" />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   return (
@@ -139,7 +205,9 @@ export default function CustomersPage() {
               </div>
             </div>
             <DialogFooter>
-              <Button onClick={handleAddCustomer}>Add Customer</Button>
+              <Button onClick={handleAddCustomer} disabled={isAdding}>
+                {isAdding ? "Adding..." : "Add Customer"}
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -175,15 +243,19 @@ export default function CustomersPage() {
             </TableHeader>
             <TableBody>
               {filteredCustomers.map((customer) => (
-                <TableRow key={customer.id}>
-                  <TableCell className="font-medium">{customer.name}</TableCell>
-                  <TableCell>{customer.phone}</TableCell>
-                  <TableCell>{customer.idCard}</TableCell>
-                  <TableCell>{customer.totalBookings}</TableCell>
-                  <TableCell>{customer.lastBooking}</TableCell>
+                <TableRow key={customer._id}>
+                  <TableCell className="font-medium">{customer.fullName}</TableCell>
+                  <TableCell>{customer.phoneNumber}</TableCell>
+                  <TableCell>{customer.idCardNumber}</TableCell>
+                  <TableCell>{customer.bookingCount}</TableCell>
+                  <TableCell>
+                    {customer.lastBookingDate 
+                      ? format(new Date(customer.lastBookingDate), "dd/MM/yyyy")
+                      : "N/A"}
+                  </TableCell>
                   <TableCell className="text-right">
                     <Button variant="outline" size="sm" asChild>
-                      <Link href={`/dashboard/customers/${customer.id}`}>View</Link>
+                      <Link href={`/dashboard/customers/${customer._id}`}>View</Link>
                     </Button>
                   </TableCell>
                 </TableRow>

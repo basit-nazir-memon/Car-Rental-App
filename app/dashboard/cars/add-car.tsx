@@ -224,155 +224,155 @@ export default function AddCar({ onCarAdded }: { onCarAdded: () => void }) {
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button onClick={() => setOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Car
-        </Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Add New Car</DialogTitle>
-          <DialogDescription>
-            Enter the car details below to add it to your fleet.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="grid gap-4 py-4">
-          <div className="grid gap-2">
-            <Label htmlFor="model">Car Model</Label>
-            <Select
-              onValueChange={(value) => setNewCar({ ...newCar, model: value })}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select car model" />
-              </SelectTrigger>
-              <SelectContent>
-                {models &&
-                  models.map((model, idx) => {
-                    return (
-                      <SelectItem key={idx} value={model}>
-                        {model}
-                      </SelectItem>
-                    );
-                  })}
-              </SelectContent>
-            </Select>
-            {errors.model && (
-              <p className="text-red-500 text-sm">{errors.model}</p>
-            )}
-          </div>
-          <div className="grid grid-cols-2 gap-4">
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogTrigger asChild>
+          <Button onClick={() => setOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add Car
+          </Button>
+        </DialogTrigger>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add New Car</DialogTitle>
+            <DialogDescription>
+              Enter the car details below to add it to your fleet.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="year">Year</Label>
-              <Input
-                id="year"
-                type="number"
-                value={newCar.year}
-                onChange={handleInputChange}
-                placeholder="Enter year"
-              />
-              {errors.year && (
-                <p className="text-red-500 text-sm">{errors.year}</p>
-              )}
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="color">Color</Label>
+              <Label htmlFor="model">Car Model</Label>
               <Select
-                onValueChange={(value) =>
-                  setNewCar({ ...newCar, color: value })
-                }
+                onValueChange={(value) => setNewCar({ ...newCar, model: value })}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select color" />
+                  <SelectValue placeholder="Select car model" />
                 </SelectTrigger>
                 <SelectContent>
-                  {carColors.map((color, idx) => (
-                    <SelectItem key={idx} value={color}>
-                      <div className="flex items-center gap-2">
-                        <span
-                          className="w-4 h-4 rounded-full border"
-                          style={{ backgroundColor: color.toLowerCase() }}
-                        ></span>
-                        {color}
-                      </div>
-                    </SelectItem>
-                  ))}
+                  {models &&
+                    models.map((model, idx) => {
+                      return (
+                        <SelectItem key={idx} value={model}>
+                          {model}
+                        </SelectItem>
+                      );
+                    })}
                 </SelectContent>
               </Select>
-              {errors.color && (
-                <p className="text-red-500 text-sm">{errors.color}</p>
+              {errors.model && (
+                <p className="text-red-500 text-sm">{errors.model}</p>
               )}
             </div>
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="registrationNumber">Registration Number</Label>
-            <Input
-              id="registrationNumber"
-              value={newCar.registrationNumber}
-              onChange={handleInputChange}
-              placeholder="Registration Number"
-            />
-            {errors.registrationNumber && (
-              <p className="text-red-500 text-sm">
-                {errors.registrationNumber}
-              </p>
-            )}
-          </div>
-          <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="year">Year</Label>
+                <Input
+                  id="year"
+                  type="number"
+                  value={newCar.year}
+                  onChange={handleInputChange}
+                  placeholder="Enter year"
+                />
+                {errors.year && (
+                  <p className="text-red-500 text-sm">{errors.year}</p>
+                )}
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="color">Color</Label>
+                <Select
+                  onValueChange={(value) =>
+                    setNewCar({ ...newCar, color: value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select color" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {carColors.map((color, idx) => (
+                      <SelectItem key={idx} value={color}>
+                        <div className="flex items-center gap-2">
+                          <span
+                            className="w-4 h-4 rounded-full border"
+                            style={{ backgroundColor: color.toLowerCase() }}
+                          ></span>
+                          {color}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {errors.color && (
+                  <p className="text-red-500 text-sm">{errors.color}</p>
+                )}
+              </div>
+            </div>
             <div className="grid gap-2">
-              <Label htmlFor="chassisNumber">Chasis Number</Label>
+              <Label htmlFor="registrationNumber">Registration Number</Label>
               <Input
-                id="chassisNumber"
-                value={newCar.chassisNumber}
+                id="registrationNumber"
+                value={newCar.registrationNumber}
                 onChange={handleInputChange}
-                placeholder="Chassis Number"
+                placeholder="Registration Number"
               />
-              {errors.chassisNumber && (
-                <p className="text-red-500 text-sm">{errors.chassisNumber}</p>
+              {errors.registrationNumber && (
+                <p className="text-red-500 text-sm">
+                  {errors.registrationNumber}
+                </p>
               )}
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="chassisNumber">Chasis Number</Label>
+                <Input
+                  id="chassisNumber"
+                  value={newCar.chassisNumber}
+                  onChange={handleInputChange}
+                  placeholder="Chassis Number"
+                />
+                {errors.chassisNumber && (
+                  <p className="text-red-500 text-sm">{errors.chassisNumber}</p>
+                )}
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="engineNumber">Engine Number</Label>
+                <Input
+                  id="engineNumber"
+                  value={newCar.engineNumber}
+                  onChange={handleInputChange}
+                  placeholder="Engine Number"
+                />
+                {errors.engineNumber && (
+                  <p className="text-red-500 text-sm">{errors.engineNumber}</p>
+                )}
+              </div>
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="engineNumber">Engine Number</Label>
+              <Label htmlFor="image">Car Image</Label>
               <Input
-                id="engineNumber"
-                value={newCar.engineNumber}
-                onChange={handleInputChange}
-                placeholder="Engine Number"
+                id="image"
+                type="file"
+                accept="image/*"
+                onChange={handleImageUpload}
               />
-              {errors.engineNumber && (
-                <p className="text-red-500 text-sm">{errors.engineNumber}</p>
+              {imageUploading && (
+                <Loader2 className="animate-spin h-5 w-5 mx-auto" />
+              )}
+              {imagePreview && (
+                <img
+                  src={imagePreview}
+                  alt="Car Preview"
+                  className="h-24 w-auto mt-2 rounded-md"
+                />
               )}
             </div>
           </div>
-
-          <div className="grid gap-2">
-            <Label htmlFor="image">Car Image</Label>
-            <Input
-              id="image"
-              type="file"
-              accept="image/*"
-              onChange={handleImageUpload}
-            />
-            {imageUploading && (
-              <Loader2 className="animate-spin h-5 w-5 mx-auto" />
-            )}
-            {imagePreview && (
-              <img
-                src={imagePreview}
-                alt="Car Preview"
-                className="h-24 w-auto mt-2 rounded-md"
-              />
-            )}
-          </div>
-        </div>
-        <DialogFooter>
-  <Button onClick={handleAddCar} disabled={loading}>
-    {loading ? "Adding..." : "Add Car"}
-  </Button>
-</DialogFooter>
-      </DialogContent>
-    </Dialog>
+          <DialogFooter>
+            <Button onClick={handleAddCar} disabled={loading}>
+              {loading ? "Adding..." : "Add Car"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
   );
 }

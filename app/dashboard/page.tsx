@@ -5,162 +5,246 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useAuth } from "@/lib/auth"
 import { Car, Calendar, DollarSign, Users, Clock } from "lucide-react"
 import { useEffect, useState } from "react";
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
+import { format } from "date-fns"
+import { Skeleton } from "@/components/ui/skeleton"
+import { useToast } from "@/components/ui/use-toast"
+import config from "../../config"
+
+interface DashboardStats {
+  totalRevenue: number
+  revenueSubText: string
+  activeBookings: number
+  activeSubtext: string
+  availableCars: number
+  carsSubText: string
+  totalCustomers: number
+  customerSubText: string
+}
+
+interface RevenueData {
+  month: string
+  revenue: number
+  expenses: number
+}
+
+interface RecentBooking {
+  id: string
+  carModel: string
+  customerName: string
+  startDate: string
+  endDate: string
+  amount: number
+  status: string
+}
+
+interface DashboardData {
+  stats: DashboardStats
+  revenueData: RevenueData[]
+  recentBookings: RecentBooking[]
+}
 
 export default function DashboardPage() {
-  const [userRole, setUserRole] = useState("");
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const { toast } = useToast()
 
   useEffect(() => {
-    const role = localStorage.getItem('role');
-    if (role) {
-      setUserRole(role);
+    const fetchDashboardData = async () => {
+      try {
+        // Check if we're in the browser environment
+        if (typeof window !== 'undefined') {
+          const token = localStorage.getItem("token")
+          if (!token) {
+            throw new Error("No authentication token found")
+          }
+
+          const response = await fetch(`${config.backendUrl}/dashboard`, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          })
+
+          if (!response.ok) {
+            throw new Error("Failed to fetch dashboard data")
+          }
+
+          const data = await response.json()
+          setDashboardData(data)
+        }
+      } catch (error) {
+        console.error("Error fetching dashboard data:", error)
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: error instanceof Error ? error.message : "Failed to load dashboard data. Please try again later.",
+        })
+      } finally {
+        setIsLoading(false)
+      }
     }
-  }, []);
+
+    fetchDashboardData()
+  }, [toast])
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col gap-6">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <Card key={index}>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <Skeleton className="h-4 w-[100px]" />
+              </CardHeader>
+              <CardContent>
+                <Skeleton className="h-8 w-[120px]" />
+                <Skeleton className="h-4 w-[80px] mt-2" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+          <Card className="col-span-4">
+            <CardHeader>
+              <Skeleton className="h-6 w-[200px]" />
+              <Skeleton className="h-4 w-[300px] mt-2" />
+            </CardHeader>
+            <CardContent>
+              <Skeleton className="h-[200px] w-full" />
+            </CardContent>
+          </Card>
+          <Card className="col-span-3">
+            <CardHeader>
+              <Skeleton className="h-6 w-[150px]" />
+              <Skeleton className="h-4 w-[200px] mt-2" />
+            </CardHeader>
+            <CardContent>
+              {Array.from({ length: 5 }).map((_, index) => (
+                <div key={index} className="flex items-center justify-between mb-4">
+                  <div className="space-y-2">
+                    <Skeleton className="h-4 w-[120px]" />
+                    <Skeleton className="h-3 w-[180px]" />
+                  </div>
+                  <Skeleton className="h-6 w-[60px]" />
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    )
+  }
+
+  if (!dashboardData) {
+    return (
+      <div className="flex items-center justify-center h-[400px]">
+        <p className="text-muted-foreground">Failed to load dashboard data</p>
+      </div>
+    )
+  }
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+    <div className="flex flex-col gap-6">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">Rs. {dashboardData.stats.totalRevenue.toLocaleString()}</div>
+            <p className="text-xs text-muted-foreground">{dashboardData.stats.revenueSubText}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Active Bookings</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{dashboardData.stats.activeBookings}</div>
+            <p className="text-xs text-muted-foreground">{dashboardData.stats.activeSubtext}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Available Cars</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{dashboardData.stats.availableCars}</div>
+            <p className="text-xs text-muted-foreground">{dashboardData.stats.carsSubText}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Customers</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{dashboardData.stats.totalCustomers}</div>
+            <p className="text-xs text-muted-foreground">{dashboardData.stats.customerSubText}</p>
+          </CardContent>
+        </Card>
       </div>
-      <Tabs defaultValue="overview" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          {userRole === "admin" && <TabsTrigger value="analytics">Analytics</TabsTrigger>}
-        </TabsList>
-        <TabsContent value="overview" className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Cars</CardTitle>
-                <Car className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">25</div>
-                <p className="text-xs text-muted-foreground">18 available, 7 on trip</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Active Bookings</CardTitle>
-                <Calendar className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">7</div>
-                <p className="text-xs text-muted-foreground">+2 from yesterday</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Customers</CardTitle>
-                <Users className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">132</div>
-                <p className="text-xs text-muted-foreground">+6 this month</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
-                  {userRole === "admin" ? "Monthly Revenue" : "Recent Bookings"}
-                </CardTitle>
-                {userRole === "admin" ? (
-                  <DollarSign className="h-4 w-4 text-muted-foreground" />
-                ) : (
-                  <Clock className="h-4 w-4 text-muted-foreground" />
-                )}
-              </CardHeader>
-              <CardContent>
-                {userRole === "admin" ? (
-                  <>
-                    <div className="text-2xl font-bold">$45,231</div>
-                    <p className="text-xs text-muted-foreground">+20.1% from last month</p>
-                  </>
-                ) : (
-                  <>
-                    <div className="text-2xl font-bold">12</div>
-                    <p className="text-xs text-muted-foreground">In the last 7 days</p>
-                  </>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-          {userRole === "admin" && (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-              <Card className="col-span-4">
-                <CardHeader>
-                  <CardTitle>Monthly Revenue</CardTitle>
-                </CardHeader>
-                <CardContent className="pl-2">
-                  <div className="h-[200px] w-full bg-muted/20 rounded-md flex items-center justify-center text-muted-foreground">
-                    Revenue Chart
-                  </div>
-                </CardContent>
-              </Card>
-              <Card className="col-span-3">
-                <CardHeader>
-                  <CardTitle>Recent Bookings</CardTitle>
-                  <CardDescription>7 bookings in the last 24 hours</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-8">
-                    {/* This would be a list of recent bookings */}
-                    <div className="flex items-center">
-                      <div className="ml-4 space-y-1">
-                        <p className="text-sm font-medium leading-none">Toyota Corolla</p>
-                        <p className="text-sm text-muted-foreground">John Doe • 3 hours ago</p>
-                      </div>
-                      <div className="ml-auto font-medium">$120</div>
-                    </div>
-                    <div className="flex items-center">
-                      <div className="ml-4 space-y-1">
-                        <p className="text-sm font-medium leading-none">Honda Civic</p>
-                        <p className="text-sm text-muted-foreground">Jane Smith • 5 hours ago</p>
-                      </div>
-                      <div className="ml-auto font-medium">$95</div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+        <Card className="col-span-4">
+          <CardHeader>
+            <CardTitle>Revenue Overview</CardTitle>
+            <CardDescription>Monthly revenue and expenses for the last 6 months</CardDescription>
+          </CardHeader>
+          <CardContent className="pl-2">
+            <div className="h-[200px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart
+                  data={dashboardData.revenueData}
+                  margin={{
+                    top: 10,
+                    right: 30,
+                    left: 0,
+                    bottom: 0,
+                  }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="month" />
+                  <YAxis />
+                  <Tooltip />
+                  <Area type="monotone" dataKey="revenue" stroke="#8884d8" fill="#8884d8" />
+                  <Area type="monotone" dataKey="expenses" stroke="#82ca9d" fill="#82ca9d" />
+                </AreaChart>
+              </ResponsiveContainer>
             </div>
-          )}
-        </TabsContent>
-        {userRole === "admin" && (
-          <TabsContent value="analytics" className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              <Card className="col-span-1">
-                <CardHeader>
-                  <CardTitle>Monthly Expenses</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="h-[300px] w-full bg-muted/20 rounded-md flex items-center justify-center text-muted-foreground">
-                    Expenses Chart
+          </CardContent>
+        </Card>
+        <Card className="col-span-3">
+          <CardHeader>
+            <CardTitle>Recent Bookings</CardTitle>
+            <CardDescription>Latest bookings and their status</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {dashboardData.recentBookings.map((booking) => (
+                <div key={booking.id} className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium leading-none">{booking.carModel}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {booking.customerName} • {format(new Date(booking.startDate), "MMM dd")} - {format(new Date(booking.endDate), "MMM dd")}
+                    </p>
                   </div>
-                </CardContent>
-              </Card>
-              <Card className="col-span-1">
-                <CardHeader>
-                  <CardTitle>Profit Margin</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="h-[300px] w-full bg-muted/20 rounded-md flex items-center justify-center text-muted-foreground">
-                    Profit Chart
+                  <div className="flex items-center gap-2">
+                    <div className={`px-2 py-1 text-xs rounded-full ${
+                      booking.status === "active" ? "bg-green-100 text-green-800" :
+                      booking.status === "completed" ? "bg-blue-100 text-blue-800" :
+                      "bg-yellow-100 text-yellow-800"
+                    }`}>
+                      {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
+                    </div>
+                    <div className="font-medium">${booking.amount}</div>
                   </div>
-                </CardContent>
-              </Card>
-              <Card className="col-span-1">
-                <CardHeader>
-                  <CardTitle>Stakeholder Division</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="h-[300px] w-full bg-muted/20 rounded-md flex items-center justify-center text-muted-foreground">
-                    Pie Chart
-                  </div>
-                </CardContent>
-              </Card>
+                </div>
+              ))}
             </div>
-          </TabsContent>
-        )}
-      </Tabs>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
 }

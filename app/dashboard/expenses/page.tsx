@@ -2,8 +2,8 @@
 
 import type React from "react"
 
-import { useState } from "react"
-import { Search, Plus } from "lucide-react"
+import { useState, useEffect } from "react"
+import { Search, Plus, Filter, Download, Upload } from "lucide-react"
 import { format } from "date-fns"
 
 import { Button } from "@/components/ui/button"
@@ -22,103 +22,217 @@ import {
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Badge } from "@/components/ui/badge"
+import { Skeleton } from "@/components/ui/skeleton"
+import { useToast } from "@/components/ui/use-toast"
+import config from "../../../config"
 
-// Mock data for expenses
-const expenses = [
-  {
-    id: 1,
-    title: "Car Maintenance",
-    description: "Regular maintenance for Toyota Corolla (ABC-123)",
-    amount: 5000,
-    date: new Date(2023, 2, 15),
-    category: "Maintenance",
-  },
-  {
-    id: 2,
-    title: "Office Rent",
-    description: "Monthly office rent payment",
-    amount: 25000,
-    date: new Date(2023, 2, 1),
-    category: "Rent",
-  },
-  {
-    id: 3,
-    title: "Fuel Expenses",
-    description: "Fuel for company vehicles",
-    amount: 15000,
-    date: new Date(2023, 2, 10),
-    category: "Fuel",
-  },
-  {
-    id: 4,
-    title: "Driver Salary",
-    description: "Monthly salary for drivers",
-    amount: 45000,
-    date: new Date(2023, 2, 5),
-    category: "Salary",
-  },
-  {
-    id: 5,
-    title: "Insurance Payment",
-    description: "Annual insurance premium for fleet",
-    amount: 120000,
-    date: new Date(2023, 1, 20),
-    category: "Insurance",
-  },
-]
+interface Expense {
+  id: string
+  title: string
+  description: string
+  amount: number
+  date: string
+  category: string
+}
 
 // Expense categories
 const expenseCategories = ["Maintenance", "Rent", "Fuel", "Salary", "Insurance", "Utilities", "Marketing", "Other"]
 
 export default function ExpensesPage() {
+  const [expenses, setExpenses] = useState<Expense[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth().toString())
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString())
+  const [selectedMonth, setSelectedMonth] = useState("all")
+  const [selectedYear, setSelectedYear] = useState("all")
+  const [selectedCategory, setSelectedCategory] = useState("all")
+  const [isAddingExpense, setIsAddingExpense] = useState(false)
+  const { toast } = useToast()
+  const [isDeleting, setIsDeleting] = useState<string | null>(null)
+
   const [newExpense, setNewExpense] = useState({
     title: "",
     description: "",
     amount: "",
-    date: format(new Date(), "yyyy-MM-dd"),
-    category: "Other",
+    date: "",
+    category: ""
   })
 
-  // Filter expenses based on search query and selected month/year
-  const filteredExpenses = expenses.filter((expense) => {
-    const matchesSearch =
-      expense.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      expense.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      expense.category.toLowerCase().includes(searchQuery.toLowerCase())
+  useEffect(() => {
+    fetchExpenses()
+  }, [selectedMonth, selectedYear, selectedCategory])
 
-    const expenseMonth = expense.date.getMonth().toString()
-    const expenseYear = expense.date.getFullYear().toString()
-    const matchesDate =
-      (selectedMonth === "all" || expenseMonth === selectedMonth) &&
-      (selectedYear === "all" || expenseYear === selectedYear)
+  const fetchExpenses = async () => {
+    try {
+      setIsLoading(true)
+      setError(null)
+      const token = localStorage.getItem("token")
+      
+      let url = `${config.backendUrl}/expenses`
+      const params = new URLSearchParams()
+      
+      // Handle date filtering
+      if (selectedMonth !== "all" || selectedYear !== "all") {
+        let startDate: Date
+        let endDate: Date
 
-    return matchesSearch && matchesDate
-  })
+        if (selectedMonth !== "all" && selectedYear !== "all") {
+          // Both month and year are selected
+          startDate = new Date(parseInt(selectedYear), parseInt(selectedMonth) - 1, 1)
+          endDate = new Date(parseInt(selectedYear), parseInt(selectedMonth), 1)
+        } else if (selectedMonth !== "all") {
+          // Only month is selected (all years)
+          // For month-only filtering, we'll use the current year
+          const currentYear = new Date().getFullYear()
+          startDate = new Date(currentYear, parseInt(selectedMonth) - 1, 1)
+          endDate = new Date(currentYear, parseInt(selectedMonth), 1)
+        } else {
+          // Only year is selected (all months)
+          startDate = new Date(parseInt(selectedYear), 0, 1)
+          endDate = new Date(parseInt(selectedYear), 11, 31)
+        }
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { id, value } = e.target
-    setNewExpense((prev) => ({ ...prev, [id]: value }))
+        params.append("startDate", format(startDate, "yyyy-MM-dd"))
+        params.append("endDate", format(endDate, "yyyy-MM-dd"))
+      }
+      
+      if (selectedCategory !== "all") {
+        params.append("category", selectedCategory)
+      }
+      
+      if (params.toString()) {
+        url += `?${params.toString()}`
+      }
+
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch expenses")
+      }
+
+      const data = await response.json()
+      setExpenses(data.expenses)
+    } catch (error) {
+      console.error("Error fetching expenses:", error)
+      setError("Failed to load expenses. Please try again later.")
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to load expenses. Please try again later.",
+      })
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  const handleSelectChange = (value: string) => {
-    setNewExpense((prev) => ({ ...prev, category: value }))
-  }
+  const handleAddExpense = async () => {
+    if (!newExpense.title || !newExpense.amount || !newExpense.date || !newExpense.category) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Please fill in all required fields.",
+      })
+      return
+    }
 
-  const handleAddExpense = () => {
-    // This would normally add the expense to the database
-    console.log("Adding expense:", newExpense)
-    // Reset form
+    try {
+      setIsAddingExpense(true)
+      const token = localStorage.getItem("token")
+      
+      const response = await fetch(`${config.backendUrl}/expenses`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          title: newExpense.title,
+          description: newExpense.description,
+          amount: parseFloat(newExpense.amount),
+          date: newExpense.date,
+          category: newExpense.category
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to add expense")
+      }
+
+      toast({
+        title: "Success",
+        description: "Expense added successfully.",
+      })
+
+      // Reset form and refresh expenses
     setNewExpense({
       title: "",
       description: "",
       amount: "",
-      date: format(new Date(), "yyyy-MM-dd"),
-      category: "Other",
-    })
+        date: "",
+        category: ""
+      })
+      fetchExpenses()
+    } catch (error) {
+      console.error("Error adding expense:", error)
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to add expense. Please try again later.",
+      })
+    } finally {
+      setIsAddingExpense(false)
+    }
   }
+
+  const handleDeleteExpense = async (expenseId: string) => {
+    try {
+      setIsDeleting(expenseId)
+      const token = localStorage.getItem("token")
+      
+      const response = await fetch(`${config.backendUrl}/expenses/${expenseId}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to delete expense")
+      }
+
+      const data = await response.json()
+      
+      toast({
+        title: "Success",
+        description: data.message || "Expense deleted successfully",
+      })
+
+      // Refresh expenses list
+      fetchExpenses()
+    } catch (error) {
+      console.error("Error deleting expense:", error)
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to delete expense. Please try again later.",
+      })
+    } finally {
+      setIsDeleting(null)
+    }
+  }
+
+  const filteredExpenses = Array.isArray(expenses) 
+    ? searchQuery ? expenses.filter((expense) =>
+        expense.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        expense.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        expense.category?.toLowerCase().includes(searchQuery.toLowerCase())
+      ) : expenses
+    : []
 
   return (
     <div className="flex flex-col gap-6">
@@ -142,7 +256,7 @@ export default function ExpensesPage() {
                 <Input
                   id="title"
                   value={newExpense.title}
-                  onChange={handleInputChange}
+                  onChange={(e) => setNewExpense({ ...newExpense, title: e.target.value })}
                   placeholder="Enter expense title"
                 />
               </div>
@@ -151,7 +265,7 @@ export default function ExpensesPage() {
                 <Textarea
                   id="description"
                   value={newExpense.description}
-                  onChange={handleInputChange}
+                  onChange={(e) => setNewExpense({ ...newExpense, description: e.target.value })}
                   placeholder="Enter expense description"
                 />
               </div>
@@ -162,18 +276,18 @@ export default function ExpensesPage() {
                     id="amount"
                     type="number"
                     value={newExpense.amount}
-                    onChange={handleInputChange}
+                    onChange={(e) => setNewExpense({ ...newExpense, amount: e.target.value })}
                     placeholder="Enter amount"
                   />
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="date">Date</Label>
-                  <Input id="date" type="date" value={newExpense.date} onChange={handleInputChange} />
+                  <Input id="date" type="date" value={newExpense.date} onChange={(e) => setNewExpense({ ...newExpense, date: e.target.value })} />
                 </div>
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="category">Category</Label>
-                <Select value={newExpense.category} onValueChange={handleSelectChange}>
+                <Select value={newExpense.category} onValueChange={(value) => setNewExpense({ ...newExpense, category: value })}>
                   <SelectTrigger id="category">
                     <SelectValue placeholder="Select category" />
                   </SelectTrigger>
@@ -188,7 +302,9 @@ export default function ExpensesPage() {
               </div>
             </div>
             <DialogFooter>
-              <Button onClick={handleAddExpense}>Add Expense</Button>
+              <Button onClick={handleAddExpense} disabled={isAddingExpense}>
+                {isAddingExpense ? "Adding..." : "Add Expense"}
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -213,18 +329,18 @@ export default function ExpensesPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Months</SelectItem>
-              <SelectItem value="0">January</SelectItem>
-              <SelectItem value="1">February</SelectItem>
-              <SelectItem value="2">March</SelectItem>
-              <SelectItem value="3">April</SelectItem>
-              <SelectItem value="4">May</SelectItem>
-              <SelectItem value="5">June</SelectItem>
-              <SelectItem value="6">July</SelectItem>
-              <SelectItem value="7">August</SelectItem>
-              <SelectItem value="8">September</SelectItem>
-              <SelectItem value="9">October</SelectItem>
-              <SelectItem value="10">November</SelectItem>
-              <SelectItem value="11">December</SelectItem>
+              <SelectItem value="1">January</SelectItem>
+              <SelectItem value="2">February</SelectItem>
+              <SelectItem value="3">March</SelectItem>
+              <SelectItem value="4">April</SelectItem>
+              <SelectItem value="5">May</SelectItem>
+              <SelectItem value="6">June</SelectItem>
+              <SelectItem value="7">July</SelectItem>
+              <SelectItem value="8">August</SelectItem>
+              <SelectItem value="9">September</SelectItem>
+              <SelectItem value="10">October</SelectItem>
+              <SelectItem value="11">November</SelectItem>
+              <SelectItem value="12">December</SelectItem>
             </SelectContent>
           </Select>
 
@@ -234,9 +350,23 @@ export default function ExpensesPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Years</SelectItem>
+              <SelectItem value="2025">2025</SelectItem>
+              <SelectItem value="2024">2024</SelectItem>
               <SelectItem value="2023">2023</SelectItem>
-              <SelectItem value="2022">2022</SelectItem>
-              <SelectItem value="2021">2021</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+            <SelectTrigger className="w-[120px]">
+              <SelectValue placeholder="Category" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Categories</SelectItem>
+              {expenseCategories.map((category) => (
+                <SelectItem key={category} value={category}>
+                  {category}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -265,11 +395,16 @@ export default function ExpensesPage() {
                   <TableCell className="font-medium">{expense.title}</TableCell>
                   <TableCell className="max-w-[300px] truncate">{expense.description}</TableCell>
                   <TableCell>{expense.category}</TableCell>
-                  <TableCell>{format(expense.date, "MMM dd, yyyy")}</TableCell>
+                  <TableCell>{format(new Date(expense.date), "MMM dd, yyyy")}</TableCell>
                   <TableCell>${expense.amount.toLocaleString()}</TableCell>
                   <TableCell className="text-right">
-                    <Button variant="outline" size="sm">
-                      Edit
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => handleDeleteExpense(expense.id)}
+                      disabled={isDeleting === expense.id}
+                    >
+                      {isDeleting === expense.id ? "Deleting..." : "Delete"}
                     </Button>
                   </TableCell>
                 </TableRow>
