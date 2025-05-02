@@ -21,6 +21,7 @@ interface CarInstance {
   engineNumber: string
   year: number
   available: boolean
+  image: string
 }
 
 interface CarModel {
@@ -161,7 +162,7 @@ export default function CarModelPage() {
             <Card className="overflow-hidden transition-all hover:shadow-md">
               <div className="relative h-48">
                 <Image
-                  src={carModel.image || "/placeholder.svg"}
+                  src={instance.image || carModel.image || "/placeholder.svg"}
                   alt={`${carModel.name} - ${instance.color}`}
                   fill
                   className="object-cover"

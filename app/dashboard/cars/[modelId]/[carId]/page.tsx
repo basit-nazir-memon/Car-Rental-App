@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Image from "next/image"
 import Link from "next/link"
-import { ChevronLeft } from "lucide-react"
+import { ChevronLeft, Trash2 } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { addDays } from "date-fns"
 import { DateRange, DayPicker } from "react-day-picker"
@@ -31,6 +31,7 @@ import { format } from "date-fns"
 import { CalendarIcon } from "lucide-react"
 import config from "../../../../../config"
 import { CustomerSearch } from "@/components/customer-search"
+import { Camera } from "lucide-react"
 
 interface CarDetails {
   id: string
@@ -77,6 +78,9 @@ export default function CarDetailPage() {
     phone: "",
     idCard: "",
   })
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [isUploading, setIsUploading] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   useEffect(() => {
     const fetchCarDetails = async () => {
@@ -251,6 +255,89 @@ export default function CarDetailPage() {
     })
   }
 
+  useEffect(() => {
+    // Check for admin role on client side
+    const role = localStorage.getItem("role")
+    setIsAdmin(role === "admin")
+  }, [])
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Validate file type
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select an image file")
+      return
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Image size should be less than 5MB")
+      return
+    }
+
+    setIsUploading(true)
+    try {
+      const formData = new FormData()
+      formData.append("image", file)
+
+      const token = localStorage.getItem("token")
+      const response = await fetch(`${config.backendUrl}/cars/upload-image/${params.carId}`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+        },
+        body: formData,
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.message || "Failed to upload image")
+      }
+
+      const data = await response.json()
+      setCarDetails(prev => prev ? { ...prev, image: data.image_url } : null)
+      toast.success("Image updated successfully")
+    } catch (error) {
+      console.error("Error uploading image:", error)
+      toast.error(error instanceof Error ? error.message : "Failed to upload image")
+    } finally {
+      setIsUploading(false)
+    }
+  }
+
+  const handleDeleteCar = async () => {
+    if (!window.confirm("Are you sure you want to delete this car? This action cannot be undone.")) {
+      return
+    }
+
+    setIsDeleting(true)
+    try {
+      const token = localStorage.getItem("token")
+      const response = await fetch(`${config.backendUrl}/cars/${params.carId}`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json() 
+        throw new Error(errorData.error || "Failed to delete car")
+      }
+
+      toast.success("Car deleted successfully")
+      router.push(`/dashboard/cars/${params.modelId}`)
+    } catch (error) {
+      console.error("Error deleting car:", error)
+      toast.error(error instanceof Error ? error.message : "Failed to delete car")
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="flex flex-col gap-6">
@@ -362,15 +449,29 @@ export default function CarDetailPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center gap-2">
-        <Button variant="outline" size="icon" asChild>
-          <Link href={`/dashboard/cars/${params.modelId}`}>
-            <ChevronLeft className="h-4 w-4" />
-          </Link>
-        </Button>
-        <h1 className="text-3xl font-bold tracking-tight">
-          Book {carDetails.model} ({carDetails.year})
-        </h1>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="icon" asChild>
+            <Link href={`/dashboard/cars/${params.modelId}`}>
+              <ChevronLeft className="h-4 w-4" />
+            </Link>
+          </Button>
+          <h1 className="text-3xl font-bold tracking-tight">
+            Book {carDetails.model} ({carDetails.year})
+          </h1>
+        </div>
+        {isAdmin && (
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={handleDeleteCar}
+            disabled={isDeleting}
+            className="flex items-center gap-2"
+          >
+            <Trash2 className="h-4 w-4" />
+            {isDeleting ? "Deleting..." : "Delete Car"}
+          </Button>
+        )}
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
@@ -386,7 +487,35 @@ export default function CarDetailPage() {
                 fill
                 className="object-cover"
               />
+              {isAdmin && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 hover:opacity-100 transition-opacity">
+                  <label className="cursor-pointer">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleImageUpload}
+                      disabled={isUploading}
+                    />
+                    <div className="flex items-center gap-2 bg-white/10 backdrop-blur-sm px-4 py-2 rounded-full text-white hover:bg-white/20 transition-colors">
+                      <Camera className="h-5 w-5" />
+                      <span>{isUploading ? "Uploading..." : "Change Image"}</span>
+                    </div>
+                  </label>
+                </div>
+              )}
             </div>
+            {/* <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <div className="relative aspect-video overflow-hidden rounded-lg"> */}
+              {/* <Image
+                src={carDetails.image || "/placeholder.svg"}
+                alt={carDetails.model || "Car image"}
+                fill
+                className="object-cover"
+              /> */}
+              
+            {/* </div>
+          </div> */}
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Model</p>

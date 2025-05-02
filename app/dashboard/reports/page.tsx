@@ -331,7 +331,7 @@ export default function ReportsPage() {
           </CardHeader>
           <CardContent>
               <div className="text-2xl font-bold">
-                ${reportData?.stats.totalRevenue.toLocaleString()}
+                Rs. {reportData?.stats.totalRevenue.toLocaleString()}
               </div>
               <div className="text-sm text-muted-foreground">
                 {reportData?.stats.revenuePercent} from last month
@@ -345,7 +345,7 @@ export default function ReportsPage() {
           </CardHeader>
           <CardContent>
               <div className="text-2xl font-bold">
-                ${reportData?.stats.totalExpenses.toLocaleString()}
+                Rs. {reportData?.stats.totalExpenses.toLocaleString()}
               </div>
               <div className="text-sm text-muted-foreground">
                 {reportData?.stats.expensesPercent} from last month
@@ -359,7 +359,7 @@ export default function ReportsPage() {
           </CardHeader>
           <CardContent>
               <div className="text-2xl font-bold">
-                ${reportData?.stats.netProfit.toLocaleString()}
+                Rs. {reportData?.stats.netProfit.toLocaleString()}
               </div>
               <div className="text-sm text-muted-foreground">
                 {reportData?.stats.netPercent} from last month

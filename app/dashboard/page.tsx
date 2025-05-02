@@ -237,7 +237,7 @@ export default function DashboardPage() {
                     }`}>
                       {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
                     </div>
-                    <div className="font-medium">${booking.amount}</div>
+                    <div className="font-medium">Rs. {booking.amount}</div>
                   </div>
                 </div>
               ))}
