@@ -54,15 +54,19 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                 <Home className="h-5 w-5" />
                 Dashboard
               </Link>
+
+              {userRole !== "stakeholder" && (
+                <Link
+                  href="/dashboard/cars"
+                  className="flex items-center gap-2 rounded-lg px-3 py-2 text-muted-foreground hover:text-primary hover:bg-muted"
+                >
+                  <Car className="h-5 w-5" />
+                  Cars
+                </Link>
+              )}
+
               {userRole === "admin" && (
                 <>
-                  <Link
-                    href="/dashboard/cars"
-                    className="flex items-center gap-2 rounded-lg px-3 py-2 text-muted-foreground hover:text-primary hover:bg-muted"
-                  >
-                    <Car className="h-5 w-5" />
-                    Cars
-                  </Link>
                   <Link
                     href="/dashboard/bookings"
                     className="flex items-center gap-2 rounded-lg px-3 py-2 text-muted-foreground hover:text-primary hover:bg-muted"
@@ -168,13 +172,14 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
               <Home className="h-4 w-4" />
               Dashboard
             </Link>
-            {userRole === "admin" && (
+
+            {userRole !== "stakeholder" && (
               <>
                 <Link
                   href="/dashboard/cars"
                   className="flex items-center gap-2 rounded-lg px-3 py-2 text-muted-foreground hover:text-primary hover:bg-muted"
                 >
-                  <Car className="h-4 w-4" />
+                  <Car className="h-5 w-5" />
                   Cars
                 </Link>
                 <Link
@@ -184,6 +189,18 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                   <Calendar className="h-4 w-4" />
                   Bookings
                 </Link>
+              </>
+            )}
+
+            {userRole === "admin" && (
+              <>
+                {/* <Link
+                  href="/dashboard/bookings"
+                  className="flex items-center gap-2 rounded-lg px-3 py-2 text-muted-foreground hover:text-primary hover:bg-muted"
+                >
+                  <Calendar className="h-4 w-4" />
+                  Bookings
+                </Link> */}
                 <Link
                   href="/dashboard/customers"
                   className="flex items-center gap-2 rounded-lg px-3 py-2 text-muted-foreground hover:text-primary hover:bg-muted"
