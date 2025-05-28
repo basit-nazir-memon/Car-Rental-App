@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { Download, Printer, Calendar, DollarSign } from "lucide-react"
+import { Download, Printer, Calendar, DollarSign, Car, TrendingUp, Wrench, FileText } from "lucide-react"
 import { format } from "date-fns"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { useToast } from "@/components/ui/use-toast"
 import config from "../../../config"
 import { useReactToPrint } from "react-to-print"
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts'
 
 interface MonthlyStats {
   totalBookings: number
@@ -55,11 +56,53 @@ interface StakeholderReport {
   netPayment: number
 }
 
+interface CarReport {
+  id: string
+  model: string
+  variant: string
+  registrationNumber: string
+  year: number
+  color: string
+  chassisNumber: string
+  engineNumber: string
+  totalBookings: number
+  totalRevenue: number
+  totalExpenses: number
+  netProfit: number
+  utilizationRate: number
+  averageBookingDuration: number
+  bookingHistory: {
+    id: string
+    customerName: string
+    startDate: string
+    endDate: string
+    amount: number
+    status: string
+  }[]
+  expenses: {
+    id: string
+    title: string
+    amount: number
+    date: string
+    category: string
+  }[]
+  monthlyRevenue: {
+    month: string
+    revenue: number
+  }[]
+  monthlyBookings: {
+    month: string
+    bookings: number
+  }[]
+}
+
 interface ReportData {
   stats: MonthlyStats
   bookingReportData: BookingReport[]
   revenueReportData: RevenueReport[]
   stakeholderReportData: StakeholderReport[]
+  cars: { id: string; model: string; registrationNumber: string }[]
+  selectedCarReport: CarReport | null
 }
 
 export default function ReportsPage() {
@@ -71,6 +114,7 @@ export default function ReportsPage() {
   const [reportData, setReportData] = useState<ReportData | null>(null)
   const { toast } = useToast()
   const reportRef = useRef<HTMLDivElement>(null)
+  const [selectedCar, setSelectedCar] = useState<string>("")
 
   useEffect(() => {
     fetchReportData()
@@ -82,7 +126,8 @@ export default function ReportsPage() {
       setError(null)
       const token = localStorage.getItem("token")
       
-      const response = await fetch(
+      // Fetch monthly report data
+      const reportResponse = await fetch(
         `${config.backendUrl}/reports/monthly?month=${selectedMonth}&year=${selectedYear}`,
         {
           headers: {
@@ -91,24 +136,84 @@ export default function ReportsPage() {
         }
       )
 
-      if (!response.ok) {
+      if (!reportResponse.ok) {
         throw new Error("Failed to fetch report data")
       }
 
-      const data = await response.json()
-      setReportData(data)
+      const reportData = await reportResponse.json()
+
+      // Fetch cars list
+      const carsResponse = await fetch(
+        `${config.backendUrl}/cars/all`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      )
+
+      if (!carsResponse.ok) {
+        throw new Error("Failed to fetch cars data")
+      }
+
+      const carsData = await carsResponse.json()
+
+      // Combine the data
+      setReportData({
+        ...reportData,
+        cars: carsData.map((car: any) => ({
+          id: car._id,
+          model: car.model,
+          registrationNumber: car.registrationNumber
+        }))
+      })
     } catch (error) {
-      console.error("Error fetching report data:", error)
-      setError("Failed to load report data. Please try again later.")
+      console.error("Error fetching data:", error)
+      setError("Failed to load data. Please try again later.")
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Failed to load report data. Please try again later.",
+        description: "Failed to load data. Please try again later.",
       })
     } finally {
       setIsLoading(false)
     }
   }
+
+  const fetchCarReport = async (carId: string) => {
+    try {
+      const token = localStorage.getItem("token")
+      const response = await fetch(
+        `${config.backendUrl}/cars/report/${carId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      )
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch car report data")
+      }
+
+      const data = await response.json()
+      setReportData(prev => prev ? { ...prev, selectedCarReport: data } : null)
+
+    } catch (error) {
+      console.error("Error fetching car report:", error)
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to load car report data. Please try again later.",
+      })
+    }
+  }
+
+  useEffect(() => {
+    if (selectedCar) {
+      fetchCarReport(selectedCar)
+    }
+  }, [selectedCar, selectedMonth, selectedYear])
 
   const handlePrint = useReactToPrint({
     contentRef: reportRef,
@@ -128,90 +233,6 @@ export default function ReportsPage() {
       }
     `,
   })
-
-  const handleDownload = async () => {
-    if (!reportRef.current) return
-
-    try {
-      // Create a new window for printing
-      const printWindow = window.open("", "_blank")
-      if (!printWindow) {
-        throw new Error("Failed to open print window")
-      }
-
-      // Get the report content
-      const reportContent = reportRef.current.innerHTML
-
-      // Create the print document
-      printWindow.document.write(`
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <title>${activeTab}-report-${selectedMonth}-${selectedYear}</title>
-            <style>
-              @page {
-                size: A4;
-                margin: 20mm;
-              }
-              body {
-                font-family: Arial, sans-serif;
-                margin: 0;
-                padding: 0;
-              }
-              .no-print {
-                display: none;
-              }
-              table {
-                width: 100%;
-                border-collapse: collapse;
-                margin-bottom: 20px;
-              }
-              th, td {
-                border: 1px solid #ddd;
-                padding: 8px;
-                text-align: left;
-              }
-              th {
-                background-color: #f2f2f2;
-              }
-              .card {
-                border: 1px solid #ddd;
-                border-radius: 4px;
-                padding: 15px;
-                margin-bottom: 20px;
-              }
-              .stats-grid {
-                display: grid;
-                grid-template-columns: repeat(4, 1fr);
-                gap: 15px;
-                margin-bottom: 20px;
-              }
-            </style>
-          </head>
-          <body>
-            <h1>${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Report - ${selectedMonth} ${selectedYear}</h1>
-            ${reportContent}
-            <script>
-              window.onload = function() {
-                window.print();
-                window.onafterprint = function() {
-                  window.close();
-                };
-              };
-            </script>
-          </body>
-        </html>
-      `)
-      printWindow.document.close()
-    } catch (error) {
-      console.error("Error downloading report:", error)
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Failed to download report. Please try again.",
-      })
-    }
-  }
 
   const handlePrintClick = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault()
@@ -373,14 +394,10 @@ export default function ReportsPage() {
           <TabsList>
             <TabsTrigger value="bookings">Bookings Report</TabsTrigger>
             <TabsTrigger value="revenue">Revenue Report</TabsTrigger>
-              {/* <TabsTrigger value="stakeholders">Stakeholder Report</TabsTrigger> */}
+            <TabsTrigger value="cars">Car Reports</TabsTrigger>
           </TabsList>
 
           <div className="flex gap-2">
-              <Button variant="outline" onClick={handleDownload}>
-              <Download className="mr-2 h-4 w-4" />
-              Download
-            </Button>
               <Button variant="outline" onClick={handlePrintClick}>
               <Printer className="mr-2 h-4 w-4" />
               Print
@@ -468,18 +485,28 @@ export default function ReportsPage() {
                   <TableRow>
                     <TableCell className="font-bold">Total</TableCell>
                     <TableCell className="font-bold">
-                        Rs. {reportData?.stats.totalRevenue.toLocaleString()}
+                        Rs. {reportData?.revenueReportData.reduce((acc, row) => ({
+                          revenue: acc.revenue + (row.revenue || 0),
+                        }), { revenue: 0}).revenue.toLocaleString()}
                     </TableCell>
                     <TableCell className="font-bold">
-                      Rs. {reportData?.stats.totalExpenses.toLocaleString()}
+                        Rs. {reportData?.revenueReportData.reduce((acc, row) => ({
+                          expenses: acc.expenses + (row.expenses || 0)
+                        }), {expenses: 0}).expenses.toLocaleString()}
                     </TableCell>
                     <TableCell className="font-bold">
-                      Rs. {reportData?.stats.netProfit.toLocaleString()}
+                        Rs. {reportData?.revenueReportData.reduce((acc, row) => ({
+                          profit: acc.profit + (row.profit || 0)
+                        }), { profit: 0 }).profit.toLocaleString()}
                     </TableCell>
                     <TableCell className="font-bold">
-                        {reportData?.stats.netProfit && reportData?.stats.totalRevenue
-                          ? Math.round((reportData.stats.netProfit / reportData.stats.totalRevenue) * 100)
-                          : 0}%
+                        {(() => {
+                          const totals = reportData?.revenueReportData.reduce((acc, row) => ({
+                            revenue: acc.revenue + (row.revenue || 0),
+                            profit: acc.profit + (row.profit || 0)
+                          }), { revenue: 0, profit: 0 });
+                          return totals?.revenue ? Math.round((totals.profit / totals.revenue) * 100) : 0;
+                        })()}%
                     </TableCell>
                   </TableRow>
                 </TableBody>
@@ -488,56 +515,261 @@ export default function ReportsPage() {
           </Card>
         </TabsContent>
 
-        {/* <TabsContent value="stakeholders" className="space-y-4">
+        <TabsContent value="cars" className="space-y-4" ref={activeTab === "cars" ? reportRef : null}>
           <Card>
             <CardHeader>
-              <CardTitle>Stakeholder Report</CardTitle>
-              <CardDescription>Revenue and payments for stakeholders in {selectedYear}.</CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Car Reports</CardTitle>
+                  <CardDescription>Detailed reports for individual cars.</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="mb-6">
+                <Select value={selectedCar} onValueChange={setSelectedCar}>
+                  <SelectTrigger className="w-[300px]">
+                    <SelectValue placeholder="Select a car" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(reportData?.cars || []).map((car) => (
+                      <SelectItem key={car.id} value={car.id}>
+                        {car.model} ({car.registrationNumber})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {reportData?.selectedCarReport && (
+                <div className="space-y-6">
+                  {/* Car Details */}
+                  <Card className="border-2">
+                    <CardHeader className="bg-muted/50">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <CardTitle className="text-2xl font-bold">{reportData.selectedCarReport.model}</CardTitle>
+                          <CardDescription className="text-base mt-1">
+                            {reportData.selectedCarReport.variant} • {reportData.selectedCarReport.year}
+                          </CardDescription>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-medium text-muted-foreground">Registration Number</p>
+                          <p className="text-lg font-bold">{reportData.selectedCarReport.registrationNumber}</p>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="pt-6">
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium text-muted-foreground">Color</p>
+                          <div className="flex items-center gap-2">
+                            <div 
+                              className="w-4 h-4 rounded-full border" 
+                              style={{ backgroundColor: reportData.selectedCarReport.color.toLowerCase() }} 
+                            />
+                            <p className="text-base font-semibold capitalize">{reportData.selectedCarReport.color}</p>
+                          </div>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium text-muted-foreground">Chassis Number</p>
+                          <p className="text-base font-semibold font-mono">{reportData.selectedCarReport.chassisNumber}</p>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium text-muted-foreground">Engine Number</p>
+                          <p className="text-base font-semibold font-mono">{reportData.selectedCarReport.engineNumber}</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Overview Cards */}
+                  <div className="grid gap-4 md:grid-cols-4">
+                    <Card className="border">
+                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Total Bookings</CardTitle>
+                        <FileText className="h-4 w-4 text-muted-foreground" />
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold">{reportData.selectedCarReport.totalBookings}</div>
+                        <p className="text-xs text-muted-foreground">
+                          {reportData.selectedCarReport.utilizationRate}% utilization
+                        </p>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="border">
+                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+                        <DollarSign className="h-4 w-4 text-muted-foreground" />
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold">
+                          Rs. {reportData.selectedCarReport.totalRevenue.toLocaleString()}
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="border">
+                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Total Expenses</CardTitle>
+                        <Wrench className="h-4 w-4 text-muted-foreground" />
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold">
+                          Rs. {reportData.selectedCarReport.totalExpenses.toLocaleString()}
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="border">
+                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Net Profit</CardTitle>
+                        <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold">
+                          Rs. {reportData.selectedCarReport.netProfit.toLocaleString()}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* Graphs */}
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <Card className="border">
+                      <CardHeader>
+                        <CardTitle>Monthly Revenue</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="h-[300px]">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={reportData.selectedCarReport.monthlyRevenue}>
+                              <CartesianGrid strokeDasharray="3 3" />
+                              <XAxis dataKey="month" />
+                              <YAxis />
+                              <Tooltip 
+                                formatter={(value) => [`Rs. ${value.toLocaleString()}`, 'Revenue']}
+                                labelFormatter={(label) => `Month: ${label}`}
+                              />
+                              <Area 
+                                type="monotone" 
+                                dataKey="revenue" 
+                                stroke="#2563eb" 
+                                fill="#3b82f6" 
+                                fillOpacity={0.2}
+                              />
+                            </AreaChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="border">
+                      <CardHeader>
+                        <CardTitle>Monthly Bookings</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="h-[300px]">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={reportData.selectedCarReport.monthlyBookings}>
+                              <CartesianGrid strokeDasharray="3 3" />
+                              <XAxis dataKey="month" />
+                              <YAxis />
+                              <Tooltip 
+                                formatter={(value) => [value, 'Bookings']}
+                                labelFormatter={(label) => `Month: ${label}`}
+                              />
+                              <Bar 
+                                dataKey="bookings" 
+                                fill="#16a34a"
+                                radius={[4, 4, 0, 0]}
+                              />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* Booking History */}
+                  <Card className="border">
+                    <CardHeader>
+                      <CardTitle>Booking History</CardTitle>
             </CardHeader>
             <CardContent>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Stakeholder</TableHead>
-                    <TableHead>Cars</TableHead>
-                    <TableHead>Total Revenue</TableHead>
-                    <TableHead>Commission</TableHead>
-                    <TableHead>Commission Amount</TableHead>
-                    <TableHead>Net Payment</TableHead>
+                            <TableHead>Customer</TableHead>
+                            <TableHead>Start Date</TableHead>
+                            <TableHead>End Date</TableHead>
+                            <TableHead>Amount</TableHead>
+                            <TableHead>Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {reportData?.stakeholderReportData.map((data) => (
-                    <TableRow key={data.id}>
-                      <TableCell className="font-medium">{data.name}</TableCell>
-                      <TableCell>{data.totalCars}</TableCell>
-                      <TableCell>${data.totalRevenue.toLocaleString()}</TableCell>
-                      <TableCell>{data.commission}%</TableCell>
-                      <TableCell>${data.commissionAmount.toLocaleString()}</TableCell>
-                      <TableCell>${data.netPayment.toLocaleString()}</TableCell>
+                          {reportData.selectedCarReport.bookingHistory.map((booking) => (
+                            <TableRow key={booking.id}>
+                              <TableCell className="font-medium">{booking.customerName}</TableCell>
+                              <TableCell>{format(new Date(booking.startDate), "MMM dd, yyyy")}</TableCell>
+                              <TableCell>{format(new Date(booking.endDate), "MMM dd, yyyy")}</TableCell>
+                              <TableCell>Rs. {booking.amount.toLocaleString()}</TableCell>
+                              <TableCell>
+                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                  booking.status === 'Completed' 
+                                    ? 'bg-green-100 text-green-800'
+                                    : booking.status === 'Active'
+                                    ? 'bg-blue-100 text-blue-800'
+                                    : 'bg-gray-100 text-gray-800'
+                                }`}>
+                                  {booking.status}
+                                </span>
+                              </TableCell>
                     </TableRow>
                   ))}
+                        </TableBody>
+                      </Table>
+                    </CardContent>
+                  </Card>
+
+                  {/* Expenses */}
+                  <Card className="border">
+                    <CardHeader>
+                      <CardTitle>Expenses</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <Table>
+                        <TableHeader>
                   <TableRow>
-                    <TableCell className="font-bold">Total</TableCell>
-                    <TableCell className="font-bold">
-                      {reportData?.stakeholderReportData.reduce((sum, data) => sum + data.totalCars, 0)}
+                            <TableHead>Title</TableHead>
+                            <TableHead>Category</TableHead>
+                            <TableHead>Date</TableHead>
+                            <TableHead>Amount</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {reportData.selectedCarReport.expenses.map((expense) => (
+                            <TableRow key={expense.id}>
+                              <TableCell className="font-medium">{expense.title}</TableCell>
+                              <TableCell>
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                  {expense.category}
+                                </span>
                     </TableCell>
-                    <TableCell className="font-bold">
-                      ${reportData?.stats.totalRevenue.toLocaleString()}
-                    </TableCell>
-                    <TableCell className="font-bold">-</TableCell>
-                    <TableCell className="font-bold">
-                      ${reportData?.stakeholderReportData.reduce((sum, data) => sum + data.commissionAmount, 0).toLocaleString()}
-                    </TableCell>
-                    <TableCell className="font-bold">
-                      ${reportData?.stats.netProfit.toLocaleString()}
-                    </TableCell>
+                              <TableCell>{format(new Date(expense.date), "MMM dd, yyyy")}</TableCell>
+                              <TableCell>Rs. {expense.amount.toLocaleString()}</TableCell>
                   </TableRow>
+                          ))}
                 </TableBody>
               </Table>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
             </CardContent>
           </Card>
-        </TabsContent> */}
+        </TabsContent>
       </Tabs>
       </div>
     </div>

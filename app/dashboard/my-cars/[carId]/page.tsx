@@ -4,7 +4,7 @@ import type React from "react";
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { ChevronLeft, Calendar, AlertTriangle, DollarSign } from "lucide-react";
+import { ChevronLeft, Calendar, AlertTriangle, DollarSign, FileDown } from "lucide-react";
 import { format } from "date-fns";
 import {
   AreaChart,
@@ -60,28 +60,39 @@ interface CarData {
   model: string;
   year: number;
   color: string;
+  user: string;
   registrationNumber: string;
   chassisNumber: string;
   engineNumber: string;
   status: string;
   image: string;
+  variant: string;
   financials: {
     totalRevenue: number;
     totalProfit: number;
     commission: number;
     commissionAmount: number;
+    totalExpenses: number;
   };
   bookings: Booking[];
   monthlyStats: MonthlyStat[];
+  expenses: {
+    id: string;
+    title: string;
+    description: string;
+    amount: number;
+    date: string;
+    category: string;
+  }[];
 }
 
 export default function MyCarDetailPage() {
   const params = useParams();
   const carId = params.carId as string;
-
   const [activeTab, setActiveTab] = useState("details");
   const [carData, setCarData] = useState<CarData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
 
   useEffect(() => {
     const fetchCarData = async () => {
@@ -123,6 +134,57 @@ export default function MyCarDetailPage() {
     fetchCarData();
   }, [params.carId]);
 
+  const handleGenerateReport = async () => {
+    try {
+      setIsGeneratingReport(true);
+      const token = localStorage.getItem("token");
+      if (!token) {
+        throw new Error("No authentication token found");
+      }
+
+      const response = await fetch(
+        `${config.backendUrl}/cars/report/pdf/${carId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to generate report");
+      }
+
+      // Get the blob from the response
+      const blob = await response.blob();
+      
+      // Create a URL for the blob
+      const url = window.URL.createObjectURL(blob);
+      
+      // Create a temporary link element
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `car-report-${carId}.pdf`;
+      
+      // Append to body, click, and remove
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      // Clean up the URL
+      window.URL.revokeObjectURL(url);
+      
+      toast.success("Report generated successfully");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to generate report"
+      );
+      console.error("Error generating report:", error);
+    } finally {
+      setIsGeneratingReport(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex h-[400px] items-center justify-center">
@@ -141,26 +203,32 @@ export default function MyCarDetailPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center gap-2">
-        <Button variant="outline" size="icon" asChild>
-          <Link href="/dashboard/my-cars">
-            <ChevronLeft className="h-4 w-4" />
-          </Link>
-        </Button>
-        <h1 className="text-3xl font-bold tracking-tight">
-          {carData.model} ({carData.year})
-        </h1>
-        <Badge
-          variant={carData.status === "available" ? "default" : "secondary"}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <h1 className="text-3xl font-bold tracking-tight">
+            {carData.model} ({carData.year})
+          </h1>
+          <Badge
+            variant={carData.status === "available" ? "default" : "secondary"}
+          >
+            {carData.status === "available" ? "Available" : "On Trip"}
+          </Badge>
+        </div>
+        <Button 
+          onClick={handleGenerateReport} 
+          disabled={isGeneratingReport}
+          className="gap-2"
         >
-          {carData.status === "available" ? "Available" : "On Trip"}
-        </Badge>
+          <FileDown className="h-4 w-4" />
+          {isGeneratingReport ? "Generating..." : "Generate Report"}
+        </Button>
       </div>
 
       <Tabs defaultValue="details" onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="details">Car Details</TabsTrigger>
           <TabsTrigger value="bookings">Booking History</TabsTrigger>
+          <TabsTrigger value="expenses">Expenses</TabsTrigger>
           <TabsTrigger value="financials">Financials</TabsTrigger>
         </TabsList>
 
@@ -185,6 +253,12 @@ export default function MyCarDetailPage() {
                       Model
                     </p>
                     <p>{carData.model}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">
+                      Variant
+                    </p>
+                    <p>{carData.variant || "-"}</p>
                   </div>
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">
@@ -222,6 +296,12 @@ export default function MyCarDetailPage() {
                     </p>
                     <p>{carData.engineNumber}</p>
                   </div>
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">
+                      Owner
+                    </p>
+                    <p>{carData.user || "-"}</p>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -246,8 +326,15 @@ export default function MyCarDetailPage() {
                         Commission ({carData.financials.commission}%)
                       </p>
                       <p className="text-lg font-semibold">
-                        Rs.{" "}
-                        {carData.financials.commissionAmount.toLocaleString()}
+                        Rs. {carData.financials.commissionAmount.toLocaleString()}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">
+                        Total Expenses
+                      </p>
+                      <p className="text-lg font-semibold">
+                        Rs. {carData?.financials?.totalExpenses?.toLocaleString() || 0}
                       </p>
                     </div>
                     <div>
@@ -340,7 +427,7 @@ export default function MyCarDetailPage() {
                               : "secondary"
                           }
                         >
-                          {booking.status === "active" ? "Active" : "Completed"}
+                          {booking.status}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
@@ -350,6 +437,39 @@ export default function MyCarDetailPage() {
                           </Link>
                         </Button>
                       </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="expenses" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Expense History</CardTitle>
+              <CardDescription>View all expenses for this car.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Title</TableHead>
+                    <TableHead>Description</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Amount</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(carData?.expenses || []).map((expense) => (
+                    <TableRow key={expense.id}>
+                      <TableCell className="font-medium">{expense.title}</TableCell>
+                      <TableCell className="max-w-[300px] truncate">{expense.description}</TableCell>
+                      <TableCell>{expense.category}</TableCell>
+                      <TableCell>{format(new Date(expense.date), "MMM dd, yyyy")}</TableCell>
+                      <TableCell>Rs. {expense.amount.toLocaleString()}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -388,8 +508,7 @@ export default function MyCarDetailPage() {
                 <div className="text-2xl font-bold">
                   Rs.{" "}
                   {(
-                    carData.financials.totalRevenue -
-                    carData.financials.totalProfit
+                    carData.financials.totalExpenses
                   ).toLocaleString()}
                 </div>
                 <p className="text-xs text-muted-foreground">

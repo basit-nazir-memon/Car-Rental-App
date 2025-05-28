@@ -29,7 +29,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   const [userRole, setUserRole] = useState("");
 
   useEffect(() => {
-    const role = localStorage.getItem('role');
+    const role = localStorage.getItem("role");
     if (role) {
       setUserRole(role);
     }
@@ -54,29 +54,29 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                 <Home className="h-5 w-5" />
                 Dashboard
               </Link>
-              <Link
-                href="/dashboard/cars"
-                className="flex items-center gap-2 rounded-lg px-3 py-2 text-muted-foreground hover:text-primary hover:bg-muted"
-              >
-                <Car className="h-5 w-5" />
-                Cars
-              </Link>
-              <Link
-                href="/dashboard/bookings"
-                className="flex items-center gap-2 rounded-lg px-3 py-2 text-muted-foreground hover:text-primary hover:bg-muted"
-              >
-                <Calendar className="h-5 w-5" />
-                Bookings
-              </Link>
-              <Link
-                href="/dashboard/customers"
-                className="flex items-center gap-2 rounded-lg px-3 py-2 text-muted-foreground hover:text-primary hover:bg-muted"
-              >
-                <Users className="h-5 w-5" />
-                Customers
-              </Link>
               {userRole === "admin" && (
                 <>
+                  <Link
+                    href="/dashboard/cars"
+                    className="flex items-center gap-2 rounded-lg px-3 py-2 text-muted-foreground hover:text-primary hover:bg-muted"
+                  >
+                    <Car className="h-5 w-5" />
+                    Cars
+                  </Link>
+                  <Link
+                    href="/dashboard/bookings"
+                    className="flex items-center gap-2 rounded-lg px-3 py-2 text-muted-foreground hover:text-primary hover:bg-muted"
+                  >
+                    <Calendar className="h-5 w-5" />
+                    Bookings
+                  </Link>
+                  <Link
+                    href="/dashboard/customers"
+                    className="flex items-center gap-2 rounded-lg px-3 py-2 text-muted-foreground hover:text-primary hover:bg-muted"
+                  >
+                    <Users className="h-5 w-5" />
+                    Customers
+                  </Link>
                   <Link
                     href="/dashboard/employees"
                     className="flex items-center gap-2 rounded-lg px-3 py-2 text-muted-foreground hover:text-primary hover:bg-muted"
@@ -116,23 +116,25 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                   My Cars
                 </Link>
               )}
-              <Link
-                href="/dashboard/settings"
-                className="flex items-center gap-2 rounded-lg px-3 py-2 text-muted-foreground hover:text-primary hover:bg-muted"
-              >
-              <Settings className="h-4 w-4" />
-              Settings
-            </Link>
+              {userRole !== "employee" && (
+                <Link
+                  href="/dashboard/settings"
+                  className="flex items-center gap-2 rounded-lg px-3 py-2 text-muted-foreground hover:text-primary hover:bg-muted"
+                >
+                  <Settings className="h-4 w-4" />
+                  Settings
+                </Link>
+              )}
             </nav>
             <div className="mt-auto">
-              <Button
+              {/* <Button
                 variant="outline"
                 size="sm"
                 className="w-full justify-start gap-2"
               >
                 <Settings className="h-4 w-4" />
                 Settings
-              </Button>
+              </Button> */}
               <Button
                 variant="outline"
                 size="sm"
@@ -166,29 +168,29 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
               <Home className="h-4 w-4" />
               Dashboard
             </Link>
-            <Link
-              href="/dashboard/cars"
-              className="flex items-center gap-2 rounded-lg px-3 py-2 text-muted-foreground hover:text-primary hover:bg-muted"
-            >
-              <Car className="h-4 w-4" />
-              Cars
-            </Link>
-            <Link
-              href="/dashboard/bookings"
-              className="flex items-center gap-2 rounded-lg px-3 py-2 text-muted-foreground hover:text-primary hover:bg-muted"
-            >
-              <Calendar className="h-4 w-4" />
-              Bookings
-            </Link>
-            <Link
-              href="/dashboard/customers"
-              className="flex items-center gap-2 rounded-lg px-3 py-2 text-muted-foreground hover:text-primary hover:bg-muted"
-            >
-              <Users className="h-4 w-4" />
-              Customers
-            </Link>
             {userRole === "admin" && (
               <>
+                <Link
+                  href="/dashboard/cars"
+                  className="flex items-center gap-2 rounded-lg px-3 py-2 text-muted-foreground hover:text-primary hover:bg-muted"
+                >
+                  <Car className="h-4 w-4" />
+                  Cars
+                </Link>
+                <Link
+                  href="/dashboard/bookings"
+                  className="flex items-center gap-2 rounded-lg px-3 py-2 text-muted-foreground hover:text-primary hover:bg-muted"
+                >
+                  <Calendar className="h-4 w-4" />
+                  Bookings
+                </Link>
+                <Link
+                  href="/dashboard/customers"
+                  className="flex items-center gap-2 rounded-lg px-3 py-2 text-muted-foreground hover:text-primary hover:bg-muted"
+                >
+                  <Users className="h-4 w-4" />
+                  Customers
+                </Link>
                 <Link
                   href="/dashboard/employees"
                   className="flex items-center gap-2 rounded-lg px-3 py-2 text-muted-foreground hover:text-primary hover:bg-muted"
@@ -235,13 +237,15 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                 My Cars
               </Link>
             )}
-            <Link
-              href="/dashboard/settings"
-              className="flex items-center gap-2 rounded-lg px-3 py-2 text-muted-foreground hover:text-primary hover:bg-muted"
-            >
-              <Settings className="h-4 w-4" />
-              Settings
-            </Link>
+            {userRole !== "employee" && (
+              <Link
+                href="/dashboard/settings"
+                className="flex items-center gap-2 rounded-lg px-3 py-2 text-muted-foreground hover:text-primary hover:bg-muted"
+              >
+                <Settings className="h-4 w-4" />
+                Settings
+              </Link>
+            )}
           </nav>
         </aside>
         <main className="flex-1 p-4 md:p-6">{children}</main>

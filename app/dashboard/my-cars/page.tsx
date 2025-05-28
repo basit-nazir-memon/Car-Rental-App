@@ -88,7 +88,7 @@ export default function MyCarPage() {
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-3xl font-bold tracking-tight">My Cars</h1>
-        <AddCar onCarAdded={onCarAdded} />
+        {/* <AddCar onCarAdded={onCarAdded} /> */}
       </div>
 
       <div className="relative">
@@ -135,7 +135,7 @@ export default function MyCarPage() {
                     </div>
                   </div>
                   <p className="text-sm text-muted-foreground">Reg: {car.registrationNumber}</p>
-                  <div className="mt-2 grid grid-cols-3 gap-2 text-center text-sm">
+                  <div className="mt-2 grid grid-cols-2 gap-2 text-center text-sm">
                     <div className="rounded-md bg-muted p-2">
                       <p className="font-medium">{car.totalBookings}</p>
                       <p className="text-xs text-muted-foreground">Bookings</p>
@@ -144,10 +144,10 @@ export default function MyCarPage() {
                       <p className="font-medium">Rs. {(car.totalRevenue / 1000).toFixed(1)}k</p>
                       <p className="text-xs text-muted-foreground">Revenue</p>
                     </div>
-                    <div className="rounded-md bg-muted p-2">
+                    {/* <div className="rounded-md bg-muted p-2">
                       <p className="font-medium">Rs. {(car.totalProfit / 1000).toFixed(1)}k</p>
                       <p className="text-xs text-muted-foreground">Profit</p>
-                    </div>
+                    </div> */}
                   </div>
                   <div className="mt-4">
                     <Button variant="outline" size="sm" className="w-full" asChild>

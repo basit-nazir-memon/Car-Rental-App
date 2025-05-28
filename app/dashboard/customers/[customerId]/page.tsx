@@ -12,10 +12,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge"
 import config from "../../../../config"
 import { useParams } from "next/navigation"
+import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
 
 interface CustomerData {
   id: string
   name: string
+  careOf: string
   phone: string
   idCard: string
   email: string
@@ -92,6 +95,40 @@ export default function CustomerDetailPage() {
     }
   }
 
+  const formatCNIC = (value: string) => {
+    // Remove all non-digit characters
+    const digits = value.replace(/\D/g, "")
+    
+    // Format as XXXXX-XXXXXXX-X
+    if (digits.length <= 5) return digits
+    if (digits.length <= 12) return `${digits.slice(0, 5)}-${digits.slice(5)}`
+    return `${digits.slice(0, 5)}-${digits.slice(5, 12)}-${digits.slice(12, 13)}`
+  }
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { id, value } = e.target
+    
+    if (!customerDetails) return
+
+    if (id === "idCard") {
+      setCustomerDetails({
+        ...customerDetails,
+        customerData: {
+          ...customerDetails.customerData,
+          idCard: formatCNIC(value)
+        }
+      })
+    } else {
+      setCustomerDetails({
+        ...customerDetails,
+        customerData: {
+          ...customerDetails.customerData,
+          [id]: value
+        }
+      })
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="flex flex-col gap-6">
@@ -162,37 +199,45 @@ export default function CustomerDetailPage() {
           <Card>
             <CardHeader>
               <CardTitle>Personal Information</CardTitle>
-              <CardDescription>View and manage customer details.</CardDescription>
+              <CardDescription>View customer details.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Full Name</p>
-                  <p className="text-lg">{customerDetails.customerData.name}</p>
+              <div className="grid gap-6 md:grid-cols-2">
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Full Name</p>
+                    <p className="text-lg">{customerDetails.customerData.name}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Care Of</p>
+                    <p className="text-lg">{customerDetails.customerData.careOf || "Not specified"}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Phone Number</p>
+                    <p className="text-lg">{customerDetails.customerData.phone}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">ID Card Number</p>
+                    <p className="text-lg">{customerDetails.customerData.idCard}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Phone Number</p>
-                  <p className="text-lg">{customerDetails.customerData.phone}</p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">ID Card Number</p>
-                  <p className="text-lg">{customerDetails.customerData.idCard}</p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Email</p>
-                  <p className="text-lg">{customerDetails.customerData.email}</p>
-                </div>
-                <div className="md:col-span-2">
-                  <p className="text-sm font-medium text-muted-foreground">Address</p>
-                  <p className="text-lg">{customerDetails.customerData.address}</p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Join Date</p>
-                  <p className="text-lg">{format(new Date(customerDetails.customerData.joinDate), "MMM dd, yyyy")}</p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Total Bookings</p>
-                  <p className="text-lg">{customerDetails.statistics.totalBookings}</p>
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Email</p>
+                    <p className="text-lg">{customerDetails.customerData.email || "Not specified"}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Address</p>
+                    <p className="text-lg">{customerDetails.customerData.address || "Not specified"}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Join Date</p>
+                    <p className="text-lg">{format(new Date(customerDetails.customerData.joinDate), "MMM dd, yyyy")}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Total Bookings</p>
+                    <p className="text-lg">{customerDetails.statistics.totalBookings}</p>
+                  </div>
                 </div>
               </div>
 

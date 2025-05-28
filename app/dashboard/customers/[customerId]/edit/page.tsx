@@ -15,6 +15,7 @@ import config from "../../../../../config"
 interface CustomerData {
   id: string
   name: string
+  careOf: string
   phone: string
   idCard: string
   email: string
@@ -34,6 +35,9 @@ export default function EditCustomerPage() {
   const [customerData, setCustomerData] = useState<CustomerData | null>(null)
   const [formData, setFormData] = useState({
     fullName: "",
+    careOf: "",
+    phone: "",
+    idCard: "",
     email: "",
     address: "",
   })
@@ -62,6 +66,9 @@ export default function EditCustomerPage() {
       setCustomerData(data.customerData)
       setFormData({
         fullName: data.customerData.name,
+        careOf: data.customerData.careOf || "",
+        phone: data.customerData.phone,
+        idCard: data.customerData.idCard,
         email: data.customerData.email,
         address: data.customerData.address,
       })
@@ -79,8 +86,21 @@ export default function EditCustomerPage() {
   }
 
   const handleSave = async () => {
-    if (!formData.fullName || !formData.email || !formData.address) {
-      toast.error("All fields are required")
+    // Validate required fields
+    if (!formData.fullName || !formData.careOf || !formData.phone || !formData.idCard) {
+      toast.error("Name, Care Of, Phone, and ID Card are required")
+      return
+    }
+
+    // Validate phone number format
+    if (!/^[0-9]{11}$/.test(formData.phone)) {
+      toast.error("Please enter a valid 11-digit phone number")
+      return
+    }
+
+    // Validate email format if provided
+    if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      toast.error("Please enter a valid email address")
       return
     }
 
@@ -93,7 +113,14 @@ export default function EditCustomerPage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          fullName: formData.fullName,
+          careOf: formData.careOf,
+          phoneNumber: formData.phone,
+          idCardNumber: formData.idCard,
+          email: formData.email || undefined,
+          address: formData.address || undefined
+        }),
       })
 
       if (!response.ok) {
@@ -173,12 +200,45 @@ export default function EditCustomerPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="fullName">Full Name</Label>
+            <Label htmlFor="fullName">Full Name *</Label>
             <Input
               id="fullName"
               value={formData.fullName}
               onChange={handleInputChange}
               placeholder="Enter customer's full name"
+              required
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="careOf">Care Of *</Label>
+            <Input
+              id="careOf"
+              value={formData.careOf}
+              onChange={handleInputChange}
+              placeholder="Enter care of name"
+              required
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="phone">Phone Number *</Label>
+            <Input
+              id="phone"
+              value={formData.phone}
+              onChange={handleInputChange}
+              placeholder="Enter 11-digit phone number"
+              maxLength={11}
+              required
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="idCard">ID Card Number *</Label>
+            <Input
+              id="idCard"
+              value={formData.idCard}
+              onChange={handleInputChange}
+              placeholder="XXXXX-XXXXXXX-X"
+              maxLength={15}
+              required
             />
           </div>
           <div className="space-y-2">

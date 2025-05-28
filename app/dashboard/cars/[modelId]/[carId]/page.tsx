@@ -32,6 +32,14 @@ import { CalendarIcon } from "lucide-react"
 import config from "../../../../../config"
 import { CustomerSearch } from "@/components/customer-search"
 import { Camera } from "lucide-react"
+import { Textarea } from "@/components/ui/textarea"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 interface CarDetails {
   id: string
@@ -44,6 +52,7 @@ interface CarDetails {
   image: string
   createdAt: string
   updatedAt: string
+  variant: string
 }
 
 interface Driver {
@@ -77,10 +86,25 @@ export default function CarDetailPage() {
     name: "",
     phone: "",
     idCard: "",
+    careOf: "",
   })
   const [isAdmin, setIsAdmin] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [driverPreference, setDriverPreference] = useState<"driver" | "self">("driver")
+  const [licenseNumber, setLicenseNumber] = useState("")
+  const [tripDescription, setTripDescription] = useState("")
+  const [tripStartTime, setTripStartTime] = useState("09:00")
+
+  // Add max date calculation
+  const maxDate = addDays(new Date(), 7)
+
+  // Generate time options for every 30 minutes
+  const timeOptions = Array.from({ length: 48 }, (_, i) => {
+    const hour = Math.floor(i / 2)
+    const minute = i % 2 === 0 ? "00" : "30"
+    return `${hour.toString().padStart(2, "0")}:${minute}`
+  })
 
   useEffect(() => {
     const fetchCarDetails = async () => {
@@ -182,8 +206,43 @@ export default function CarDetailPage() {
   // Calculate remaining amount
   const remaining = totalBill - advancePaid - totalBill * (discountPercentage / 100)
 
+  const formatCNIC = (value: string) => {
+    // Remove all non-digit characters
+    const digits = value.replace(/\D/g, '')
+    
+    // Format as XXXXX-XXXXXXX-X
+    if (digits.length <= 5) {
+      return digits
+    } else if (digits.length <= 12) {
+      return `${digits.slice(0, 5)}-${digits.slice(5)}`
+    } else {
+      return `${digits.slice(0, 5)}-${digits.slice(5, 12)}-${digits.slice(12, 13)}`
+    }
+  }
+
+  const formatPhoneNumber = (value: string) => {
+    // Remove all non-digit characters
+    const digits = value.replace(/\D/g, '')
+    
+    // Ensure it starts with 03 and is exactly 11 digits
+    if (digits.length > 0 && !digits.startsWith('03')) {
+      return '03' + digits.slice(0, 9)
+    }
+    return digits.slice(0, 11)
+  }
+
+  const handleCNICChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formattedValue = formatCNIC(e.target.value)
+    setCustomerDetails(prev => ({ ...prev, idCard: formattedValue }))
+  }
+
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formattedValue = formatPhoneNumber(e.target.value)
+    setCustomerDetails(prev => ({ ...prev, phone: formattedValue }))
+  }
+
   const handleBookCar = async () => {
-    if (!selectedDriver) {
+    if (driverPreference === "driver" && !selectedDriver) {
       toast.error("Please select a driver")
       return
     }
@@ -193,8 +252,36 @@ export default function CarDetailPage() {
       return
     }
 
+    // Add date validation
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const maxDate = addDays(today, 7)
+
+    if (dateRange.from < today) {
+      toast.error("Booking start date cannot be in the past")
+      return
+    }
+
+    if (dateRange.from > maxDate) {
+      toast.error("Bookings can only be made up to 7 days in advance")
+      return
+    }
+
     if (!meterReading) {
       toast.error("Please enter meter reading")
+      return
+    }
+
+    // Validate CNIC format
+    const cnicDigits = customerDetails.idCard.replace(/\D/g, '')
+    if (cnicDigits.length !== 13) {
+      toast.error("Please enter a valid CNIC number")
+      return
+    }
+
+    // Validate phone number format
+    if (customerDetails.phone.length !== 11 || !customerDetails.phone.startsWith('03')) {
+      toast.error("Please enter a valid phone number starting with 03")
       return
     }
 
@@ -213,11 +300,15 @@ export default function CarDetailPage() {
         },
         body: JSON.stringify({
           carId: params.carId,
-          driverId: selectedDriver,
+          driverId: driverPreference === "driver" ? selectedDriver : null,
+          driverPreference,
+          customerLicenseNumber: driverPreference === "self" ? licenseNumber : null,
           tripType,
           cityName: tripType === "out-of-city" ? cityName : null,
           startDate: dateRange.from,
           endDate: dateRange.to,
+          tripStartTime,
+          tripDescription,
           meterReading: Number(meterReading),
           totalBill,
           advancePaid,
@@ -226,11 +317,13 @@ export default function CarDetailPage() {
           customerName: customerDetails.name,
           cellNumber: customerDetails.phone,
           idCardNumber: customerDetails.idCard,
+          careOf: customerDetails.careOf,
         }),
       })
 
       if (!response.ok) {
-        throw new Error("Failed to book car")
+        const error = await response.json()
+        throw new Error(error.error || "Failed to book car")
       }
 
       toast.success("Car booked successfully!")
@@ -241,7 +334,7 @@ export default function CarDetailPage() {
       }, 2000)
     } catch (error) {
       console.error("Error booking car:", error)
-      toast.error("Failed to book car. Please try again.")
+      toast.error(error instanceof Error ? error.message : "Failed to book car. Please try again.")
     } finally {
       setIsBooking(false)
     }
@@ -252,6 +345,7 @@ export default function CarDetailPage() {
       name: customer.fullName,
       phone: customer.phoneNumber,
       idCard: customer.idCardNumber,
+      careOf: customer.careOf,
     })
   }
 
@@ -336,6 +430,36 @@ export default function CarDetailPage() {
     } finally {
       setIsDeleting(false)
     }
+  }
+
+  // Add function to handle date selection
+  const handleDateSelect = (range: DateRange | undefined) => {
+    if (!range?.from) {
+      setDateRange(range)
+      return
+    }
+
+    // If start date is selected and it's within 7 days
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    
+    if (range.from < today) {
+      toast.error("Booking start date cannot be in the past")
+      return
+    }
+
+    if (range.from > maxDate) {
+      toast.error("Bookings can only be made up to 7 days in advance")
+      return
+    }
+
+    // If end date is selected, ensure it's after start date
+    if (range.to && range.to < range.from) {
+      toast.error("End date must be after start date")
+      return
+    }
+
+    setDateRange(range)
   }
 
   if (isLoading) {
@@ -485,6 +609,7 @@ export default function CarDetailPage() {
                 src={carDetails.image || "/placeholder.svg"}
                 alt={`${carDetails.model} - ${carDetails.color}`}
                 fill
+                loading="lazy"
                 className="object-cover"
               />
               {isAdmin && (
@@ -520,6 +645,10 @@ export default function CarDetailPage() {
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Model</p>
                 <p>{carDetails.model}</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Variant</p>
+                <p>{carDetails.variant || "N/A"}</p>
               </div>
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Year</p>
@@ -584,17 +713,36 @@ export default function CarDetailPage() {
                   <Input
                     id="phone"
                     value={customerDetails.phone}
-                    onChange={(e) => setCustomerDetails({ ...customerDetails, phone: e.target.value })}
-                    placeholder="Enter customer's phone number"
+                    onChange={handlePhoneChange}
+                    placeholder="03XXXXXXXXX"
+                    maxLength={11}
+                    pattern="^03[0-9]{9}$"
                   />
+                  {customerDetails.phone && customerDetails.phone.length !== 11 && (
+                    <p className="text-sm text-destructive">Phone number must be 11 digits starting with 03</p>
+                  )}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="idCard">ID Card Number</Label>
+                  <Label htmlFor="idCard">CNIC Number</Label>
                   <Input
                     id="idCard"
                     value={customerDetails.idCard}
-                    onChange={(e) => setCustomerDetails({ ...customerDetails, idCard: e.target.value })}
-                    placeholder="Enter customer's ID card number"
+                    onChange={handleCNICChange}
+                    placeholder="XXXXX-XXXXXXX-X"
+                    maxLength={15}
+                  />
+                  {customerDetails.idCard && customerDetails.idCard.replace(/\D/g, '').length !== 13 && (
+                    <p className="text-sm text-destructive">CNIC must be 13 digits</p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="careOf">Care Of</Label>
+                  <Input
+                    id="careOf"
+                    value={customerDetails.careOf}
+                    onChange={(e) => setCustomerDetails({ ...customerDetails, careOf: e.target.value })}
+                    placeholder="Enter care of person name"
+                    // required
                   />
                 </div>
               </div>
@@ -607,38 +755,69 @@ export default function CarDetailPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label>Select Driver</Label>
-                {isDriversLoading ? (
-                  <div className="space-y-2">
-                    {Array.from({ length: 3 }).map((_, index) => (
-                      <div key={index} className="flex items-center gap-2">
-                        <Skeleton className="h-4 w-4" />
-                        <Skeleton className="h-6 w-32" />
-                      </div>
-                    ))}
+                <Label>Driver Preference</Label>
+                <RadioGroup value={driverPreference} onValueChange={(value) => {
+                  setDriverPreference(value as "driver" | "self")
+                  setSelectedDriver(null) // Reset selected driver when switching preference
+                }}>
+                  <div className="flex items-center space-x-4">
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="driver" id="with-driver" />
+                      <Label htmlFor="with-driver">With Driver</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="self" id="self-drive" />
+                      <Label htmlFor="self-drive">Self Drive</Label>
+                    </div>
                   </div>
-                ) : driversError ? (
-                  <div className="text-sm text-destructive">{driversError}</div>
-                ) : drivers.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">No drivers available for selected dates</div>
-                ) : (
-                  <RadioGroup
-                    value={selectedDriver || ""}
-                    onValueChange={setSelectedDriver}
-                  >
-                    <div className="grid gap-4">
-                      {drivers.map((driver) => (
-                        <div key={driver.id} className="flex items-center space-x-2">
-                          <RadioGroupItem value={driver.id} id={`driver-${driver.id}`} />
-                          <Label htmlFor={`driver-${driver.id}`} className="cursor-pointer">
-                            {driver.name}
-                          </Label>
+                </RadioGroup>
+              </div>
+
+              {driverPreference === "self" ? (
+                <div className="space-y-2">
+                  <Label htmlFor="licenseNumber">License Number (Optional)</Label>
+                  <Input
+                    id="licenseNumber"
+                    placeholder="Enter your license number"
+                    value={licenseNumber}
+                    onChange={(e) => setLicenseNumber(e.target.value)}
+                  />
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <Label>Select Driver</Label>
+                  {isDriversLoading ? (
+                    <div className="space-y-2">
+                      {Array.from({ length: 3 }).map((_, index) => (
+                        <div key={index} className="flex items-center gap-2">
+                          <Skeleton className="h-4 w-4" />
+                          <Skeleton className="h-6 w-32" />
                         </div>
                       ))}
                     </div>
-                  </RadioGroup>
-                )}
-              </div>
+                  ) : driversError ? (
+                    <div className="text-sm text-destructive">{driversError}</div>
+                  ) : drivers.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">No drivers available for selected dates</div>
+                  ) : (
+                    <RadioGroup
+                      value={selectedDriver || ""}
+                      onValueChange={setSelectedDriver}
+                    >
+                      <div className="grid gap-4">
+                        {drivers.map((driver) => (
+                          <div key={driver.id} className="flex items-center space-x-2">
+                            <RadioGroupItem value={driver.id} id={`driver-${driver.id}`} />
+                            <Label htmlFor={`driver-${driver.id}`} className="cursor-pointer">
+                              {driver.name}
+                            </Label>
+                          </div>
+                        ))}
+                      </div>
+                    </RadioGroup>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -712,13 +891,55 @@ export default function CarDetailPage() {
                     mode="range"
                     defaultMonth={dateRange?.from}
                     selected={dateRange}
-                    onSelect={setDateRange}
+                    onSelect={handleDateSelect}
                     numberOfMonths={2}
-                    disabled={(date) => date < new Date()}
+                    disabled={(date) => {
+                      const today = new Date()
+                      today.setHours(0, 0, 0, 0)
+                      
+                      if (dateRange?.from) {
+                        return date < dateRange.from
+                      }
+                      
+                      return date < today || date > maxDate
+                    }}
                     className="border rounded-md"
                   />
                 </PopoverContent>
               </Popover>
+              <p className="text-sm text-muted-foreground">
+                Start date must be within the next 7 days. End date can be any date after the start date.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="tripStartTime">Trip Start Time</Label>
+              <Select
+                value={tripStartTime}
+                onValueChange={setTripStartTime}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select start time" />
+                </SelectTrigger>
+                <SelectContent className="max-h-[300px]">
+                  {timeOptions.map((time) => (
+                    <SelectItem key={time} value={time}>
+                      {time}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="tripDescription">Trip Description</Label>
+              <Textarea
+                id="tripDescription"
+                placeholder="Enter trip details, purpose, or any special requirements..."
+                value={tripDescription}
+                onChange={(e) => setTripDescription(e.target.value)}
+                className="min-h-[100px]"
+              />
             </div>
           </CardContent>
         </Card>
@@ -772,7 +993,7 @@ export default function CarDetailPage() {
 
             <div className="flex justify-between">
               <span className="font-medium">Remaining Amount:</span>
-              <span className="font-bold text-lg">${remaining.toFixed(2)}</span>
+              <span className="font-bold text-lg">Rs. {remaining.toFixed(2)}</span>
             </div>
 
             <Button 

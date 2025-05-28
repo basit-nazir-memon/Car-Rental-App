@@ -22,7 +22,6 @@ export default function Home() {
 
   const { login } = useAuth();
 
-
   // const handleSubmit = async (e: React.FormEvent) => {
   //   e.preventDefault()
   //   setIsLoading(true)
@@ -78,6 +77,7 @@ export default function Home() {
       // Store token in localStorage
       localStorage.setItem("token", authToken);
       localStorage.setItem("role", data.role);
+      localStorage.setItem("id", data.id);
       localStorage.setItem("email", data.email);
       localStorage.setItem("name", data.name);
       localStorage.setItem("avatar", data.avatar);

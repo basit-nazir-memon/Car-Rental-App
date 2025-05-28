@@ -1,133 +1,135 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, use } from "react"
 import Link from "next/link"
 import Image from "next/image"
-import { ChevronLeft, DollarSign, BarChart3 } from "lucide-react"
+import { ChevronLeft, DollarSign, Car, Calendar, TrendingUp, Users, AlertTriangle } from "lucide-react"
 import { format } from "date-fns"
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+} from "recharts"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useToast } from "@/components/ui/use-toast"
+import config from "@/config"
 
-// Mock data for a specific stakeholder
-const stakeholderData = {
-  id: 1,
-  name: "Ali Hassan",
-  idCard: "12345-6789012-3",
-  email: "ali.hassan@example.com",
-  phone: "+92 300 1234567",
-  address: "123 Main Street, Karachi, Pakistan",
-  commission: 15,
-  totalCars: 3,
-  totalRevenue: 125000,
-  totalProfit: 75000,
-  joinDate: "2021-05-15",
-  image: "/placeholder.svg?height=300&width=300",
-  bankDetails: {
-    accountName: "Ali Hassan",
-    accountNumber: "1234567890",
-    bankName: "MCB Bank",
-    branchCode: "0123",
-  },
+interface StakeholderData {
+  stakeholder: {
+    id: string;
+    name: string;
+    email: string;
+    phone: string;
+    commissionPercentage: number;
+    avatar: string;
+  };
+  overview: {
+    totalCars: number;
+    totalBookings: number;
+    completedBookings: number;
+    totalRevenue: number;
+    totalExpenses: number;
+    totalCommission: number;
+    totalProfit: number;
+  };
+  cars: Array<{
+    id: string;
+    model: string;
+    year: number;
+    color: string;
+    variant: string;
+    registrationNumber: string;
+    image: string;
+    stats: {
+      totalBookings: number;
+      completedBookings: number;
+      totalRevenue: number;
+      totalExpenses: number;
+      commissionAmount: number;
+      totalProfit: number;
+    }
+  }>;
 }
 
-// Mock data for stakeholder's cars
-const stakeholderCars = [
-  {
-    id: 1,
-    model: "Toyota Corolla",
-    year: 2022,
-    color: "red",
-    registrationNumber: "ABC-123",
-    chassisNumber: "TC2022RED001",
-    engineNumber: "ENG2022001",
-    image: "/placeholder.svg?height=200&width=300",
-    available: true,
-    totalBookings: 15,
-    totalRevenue: 225000,
-    totalProfit: 135000,
-  },
-  {
-    id: 2,
-    model: "Honda Civic",
-    year: 2021,
-    color: "blue",
-    registrationNumber: "DEF-456",
-    chassisNumber: "HC2021BLU001",
-    engineNumber: "ENG2021001",
-    image: "/placeholder.svg?height=200&width=300",
-    available: false,
-    totalBookings: 12,
-    totalRevenue: 180000,
-    totalProfit: 108000,
-  },
-  {
-    id: 3,
-    model: "Suzuki Swift",
-    year: 2020,
-    color: "white",
-    registrationNumber: "GHI-789",
-    chassisNumber: "SS2020WHT001",
-    engineNumber: "ENG2020001",
-    image: "/placeholder.svg?height=200&width=300",
-    available: true,
-    totalBookings: 18,
-    totalRevenue: 180000,
-    totalProfit: 108000,
-  },
-]
+interface PageProps {
+  params: Promise<{
+    stakeholderId: string;
+  }>;
+}
 
-// Mock data for stakeholder's payments
-const stakeholderPayments = [
-  {
-    id: 1,
-    date: new Date(2023, 2, 15),
-    amount: 45000,
-    status: "paid",
-    reference: "PAY-2023-03-15-001",
-    method: "Bank Transfer",
-  },
-  {
-    id: 2,
-    date: new Date(2023, 1, 15),
-    amount: 38000,
-    status: "paid",
-    reference: "PAY-2023-02-15-001",
-    method: "Bank Transfer",
-  },
-  {
-    id: 3,
-    date: new Date(2023, 0, 15),
-    amount: 42000,
-    status: "paid",
-    reference: "PAY-2023-01-15-001",
-    method: "Bank Transfer",
-  },
-  {
-    id: 4,
-    date: new Date(2023, 3, 15),
-    amount: 50000,
-    status: "pending",
-    reference: "PAY-2023-04-15-001",
-    method: "Bank Transfer",
-  },
-]
+const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
 
-// Monthly revenue data for charts
-const monthlyRevenueData = [
-  { month: "Jan", revenue: 42000 },
-  { month: "Feb", revenue: 38000 },
-  { month: "Mar", revenue: 45000 },
-  { month: "Apr", revenue: 50000 },
-]
+export default function StakeholderDetailPage({ params }: PageProps) {
+  const resolvedParams = use(params)
+  const [activeTab, setActiveTab] = useState("overview")
+  const [stakeholderData, setStakeholderData] = useState<StakeholderData | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const { toast } = useToast()
 
-export default function StakeholderDetailPage({ params }: { params: { stakeholderId: string } }) {
-  const [activeTab, setActiveTab] = useState("details")
-  const [selectedYear, setSelectedYear] = useState("2023")
+  useEffect(() => {
+    fetchStakeholderData()
+  }, [resolvedParams.stakeholderId])
+
+  const fetchStakeholderData = async () => {
+    try {
+      setIsLoading(true)
+      const token = localStorage.getItem("token")
+      
+      const response = await fetch(
+        `${config.backendUrl}/stakeholders/details/${resolvedParams.stakeholderId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      )
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch stakeholder data")
+      }
+
+      const data = await response.json()
+      setStakeholderData(data)
+    } catch (error) {
+      console.error("Error fetching data:", error)
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to load data. Please try again later.",
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  if (isLoading) {
+    return <div>Loading...</div>
+  }
+
+  if (!stakeholderData) {
+    return <div>Stakeholder not found</div>
+  }
+
+  const { stakeholder, overview, cars } = stakeholderData
+
+  const pieChartData = [
+    { name: 'Revenue', value: overview.totalRevenue },
+    { name: 'Expenses', value: overview.totalExpenses },
+    { name: 'Commission', value: overview.totalCommission },
+    { name: 'Profit', value: overview.totalProfit },
+  ]
 
   return (
     <div className="flex flex-col gap-6">
@@ -137,130 +139,136 @@ export default function StakeholderDetailPage({ params }: { params: { stakeholde
             <ChevronLeft className="h-4 w-4" />
           </Link>
         </Button>
-        <h1 className="text-3xl font-bold tracking-tight">{stakeholderData.name}</h1>
+        <h1 className="text-3xl font-bold tracking-tight">{stakeholder.name}</h1>
       </div>
 
-      <Tabs defaultValue="details" onValueChange={setActiveTab}>
+      <Tabs defaultValue="overview" onValueChange={setActiveTab}>
         <TabsList>
-          <TabsTrigger value="details">Stakeholder Details</TabsTrigger>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="cars">Cars</TabsTrigger>
-          <TabsTrigger value="payments">Payments</TabsTrigger>
-          <TabsTrigger value="analytics">Analytics</TabsTrigger>
+          <TabsTrigger value="financials">Financials</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="details" className="space-y-4">
-          <div className="grid gap-6 md:grid-cols-3">
-            <Card className="md:col-span-1">
-              <CardHeader>
-                <CardTitle>Profile</CardTitle>
+        <TabsContent value="overview" className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Cars</CardTitle>
+                <Car className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
-              <CardContent className="flex flex-col items-center gap-4">
-                <div className="relative h-48 w-48 overflow-hidden rounded-full">
-                  <Image
-                    src={stakeholderData.image || "/placeholder.svg"}
-                    alt={stakeholderData.name}
-                    fill
-                    className="object-cover"
-                  />
-                </div>
-                <div className="text-center">
-                  <h2 className="text-xl font-bold">{stakeholderData.name}</h2>
-                  <p className="text-sm text-muted-foreground">Stakeholder ID: {stakeholderData.id}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">Joined on {stakeholderData.joinDate}</p>
-                </div>
-                <div className="mt-4 grid w-full grid-cols-2 gap-4">
-                  <div className="rounded-lg bg-muted p-3 text-center">
-                    <p className="text-sm text-muted-foreground">Total Cars</p>
-                    <p className="text-2xl font-bold">{stakeholderData.totalCars}</p>
-                  </div>
-                  <div className="rounded-lg bg-muted p-3 text-center">
-                    <p className="text-sm text-muted-foreground">Commission</p>
-                    <p className="text-2xl font-bold">{stakeholderData.commission}%</p>
-                  </div>
-                </div>
+              <CardContent>
+                <div className="text-2xl font-bold">{overview.totalCars}</div>
+                <p className="text-xs text-muted-foreground">Total cars owned</p>
               </CardContent>
             </Card>
 
-            <Card className="md:col-span-2">
-              <CardHeader>
-                <CardTitle>Personal Information</CardTitle>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Bookings</CardTitle>
+                <Calendar className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">ID Card Number</p>
-                    <p className="text-lg">{stakeholderData.idCard}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Email</p>
-                    <p className="text-lg">{stakeholderData.email}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Phone</p>
-                    <p className="text-lg">{stakeholderData.phone}</p>
-                  </div>
-                  <div className="md:col-span-2">
-                    <p className="text-sm font-medium text-muted-foreground">Address</p>
-                    <p className="text-lg">{stakeholderData.address}</p>
-                  </div>
-                </div>
-
-                <div className="mt-6">
-                  <h3 className="mb-2 text-lg font-semibold">Bank Details</h3>
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    <div>
-                      <p className="text-sm font-medium text-muted-foreground">Account Name</p>
-                      <p className="text-lg">{stakeholderData.bankDetails.accountName}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-muted-foreground">Account Number</p>
-                      <p className="text-lg">{stakeholderData.bankDetails.accountNumber}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-muted-foreground">Bank Name</p>
-                      <p className="text-lg">{stakeholderData.bankDetails.bankName}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-muted-foreground">Branch Code</p>
-                      <p className="text-lg">{stakeholderData.bankDetails.branchCode}</p>
-                    </div>
-                  </div>
-                </div>
+              <CardContent>
+                <div className="text-2xl font-bold">{overview.totalBookings}</div>
+                <p className="text-xs text-muted-foreground">
+                  {overview.completedBookings} completed
+                </p>
               </CardContent>
             </Card>
-          </div>
 
-          <div className="grid gap-6 md:grid-cols-3">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
                 <DollarSign className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">${stakeholderData.totalRevenue.toLocaleString()}</div>
-                <p className="text-xs text-muted-foreground">Lifetime earnings from all cars</p>
+                <div className="text-2xl font-bold">
+                  Rs. {overview?.totalRevenue?.toLocaleString()}
+                </div>
+                <p className="text-xs text-muted-foreground">Lifetime earnings</p>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Profit</CardTitle>
-                <DollarSign className="h-4 w-4 text-muted-foreground" />
+                <CardTitle className="text-sm font-medium">Net Profit</CardTitle>
+                <TrendingUp className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">${stakeholderData.totalProfit.toLocaleString()}</div>
-                <p className="text-xs text-muted-foreground">After commission and expenses</p>
+                <div className="text-2xl font-bold">
+                  Rs. {overview?.totalProfit?.toLocaleString()}
+                </div>
+                <p className="text-xs text-muted-foreground">After expenses & commission</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle>Financial Distribution</CardTitle>
+                <CardDescription>Breakdown of revenue, expenses, and profit</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-[300px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={pieChartData}
+                        cx="50%"
+                        cy="50%"
+                        labelLine={false}
+                        outerRadius={80}
+                        fill="#8884d8"
+                        dataKey="value"
+                        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                      >
+                        {pieChartData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        formatter={(value: number) => [`Rs. ${value?.toLocaleString()}`, 'Amount']}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
               </CardContent>
             </Card>
 
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Monthly Average</CardTitle>
-                <BarChart3 className="h-4 w-4 text-muted-foreground" />
+              <CardHeader>
+                <CardTitle>Performance Metrics</CardTitle>
+                <CardDescription>Key performance indicators</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">$43,750</div>
-                <p className="text-xs text-muted-foreground">Average monthly revenue</p>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium">Commission Rate</p>
+                      <p className="text-2xl font-bold">{stakeholder.commissionPercentage}%</p>
+                    </div>
+                    <div className="space-y-1 text-right">
+                      <p className="text-sm font-medium">Total Commission</p>
+                      <p className="text-2xl font-bold">
+                        Rs. {overview?.totalCommission?.toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium">Total Expenses</p>
+                      <p className="text-2xl font-bold">
+                        Rs. {overview?.totalExpenses?.toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="space-y-1 text-right">
+                      <p className="text-sm font-medium">Completion Rate</p>
+                      <p className="text-2xl font-bold">
+                        {((overview?.completedBookings / overview?.totalBookings) * 100)?.toFixed(1)}%
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -278,15 +286,15 @@ export default function StakeholderDetailPage({ params }: { params: { stakeholde
                   <TableRow>
                     <TableHead>Car</TableHead>
                     <TableHead>Registration</TableHead>
-                    <TableHead>Status</TableHead>
                     <TableHead>Bookings</TableHead>
                     <TableHead>Revenue</TableHead>
+                    <TableHead>Expenses</TableHead>
                     <TableHead>Profit</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {stakeholderCars.map((car) => (
+                  {cars.map((car) => (
                     <TableRow key={car.id}>
                       <TableCell>
                         <div className="flex items-center gap-3">
@@ -301,22 +309,27 @@ export default function StakeholderDetailPage({ params }: { params: { stakeholde
                           </div>
                           <div>
                             <div className="font-medium">{car.model}</div>
-                            <div className="text-sm text-muted-foreground">{car.year}</div>
+                            <div className="text-sm text-muted-foreground">
+                              {car.variant} • {car.year}
+                            </div>
                           </div>
                         </div>
                       </TableCell>
                       <TableCell>{car.registrationNumber}</TableCell>
                       <TableCell>
-                        <Badge variant={car.available ? "default" : "secondary"}>
-                          {car.available ? "Available" : "On Trip"}
-                        </Badge>
+                        <div className="space-y-1">
+                          <div>{car.stats.totalBookings} total</div>
+                          <div className="text-sm text-muted-foreground">
+                            {car.stats.completedBookings} completed
+                          </div>
+                        </div>
                       </TableCell>
-                      <TableCell>{car.totalBookings}</TableCell>
-                      <TableCell>${car.totalRevenue.toLocaleString()}</TableCell>
-                      <TableCell>${car.totalProfit.toLocaleString()}</TableCell>
+                      <TableCell>Rs. {car?.stats?.totalRevenue?.toLocaleString()}</TableCell>
+                      <TableCell>Rs. {car?.stats?.totalExpenses?.toLocaleString()}</TableCell>
+                      <TableCell>Rs. {car?.stats?.totalProfit?.toLocaleString()}</TableCell>
                       <TableCell className="text-right">
                         <Button variant="outline" size="sm" asChild>
-                          <Link href={`/dashboard/cars/${car.id}`}>View Details</Link>
+                          <Link href={`/dashboard/my-cars/${car.id}`}>View Details</Link>
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -327,112 +340,62 @@ export default function StakeholderDetailPage({ params }: { params: { stakeholde
           </Card>
         </TabsContent>
 
-        <TabsContent value="payments" className="space-y-4">
+        <TabsContent value="financials" className="space-y-4">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle>Payment History</CardTitle>
-                <CardDescription>View all payments made to this stakeholder.</CardDescription>
-              </div>
-              <Button>
-                <DollarSign className="mr-2 h-4 w-4" />
-                Make Payment
-              </Button>
+            <CardHeader>
+              <CardTitle>Financial Summary</CardTitle>
+              <CardDescription>Detailed breakdown of revenue, expenses, and profit.</CardDescription>
             </CardHeader>
             <CardContent>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Reference</TableHead>
-                    <TableHead>Method</TableHead>
+                    <TableHead>Category</TableHead>
                     <TableHead>Amount</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead>Percentage</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {stakeholderPayments.map((payment) => (
-                    <TableRow key={payment.id}>
-                      <TableCell>{format(payment.date, "MMM dd, yyyy")}</TableCell>
-                      <TableCell>{payment.reference}</TableCell>
-                      <TableCell>{payment.method}</TableCell>
-                      <TableCell>${payment.amount.toLocaleString()}</TableCell>
+                  <TableRow>
+                    <TableCell className="font-medium">Total Revenue</TableCell>
+                    <TableCell>
+                      Rs. {overview?.totalRevenue?.toLocaleString()}
+                    </TableCell>
+                    <TableCell>100%</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell className="font-medium">
+                      Commission ({stakeholder.commissionPercentage}%)
+                    </TableCell>
+                    <TableCell>
+                      Rs. {overview?.totalCommission?.toLocaleString()}
+                    </TableCell>
+                    <TableCell>
+                      {((overview?.totalCommission / overview?.totalRevenue) * 100)?.toFixed(1)}%
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell className="font-medium">Total Expenses</TableCell>
+                    <TableCell>
+                      Rs. {overview?.totalExpenses?.toLocaleString()}
+                    </TableCell>
+                    <TableCell>
+                      {((overview?.totalExpenses / overview?.totalRevenue) * 100)?.toFixed(1)}%
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell className="font-medium">Net Profit</TableCell>
                       <TableCell>
-                        <Badge variant={payment.status === "paid" ? "default" : "secondary"}>
-                          {payment.status === "paid" ? "Paid" : "Pending"}
-                        </Badge>
+                      Rs. {overview?.totalProfit?.toLocaleString()}
                       </TableCell>
-                      <TableCell className="text-right">
-                        <Button variant="outline" size="sm">
-                          View Receipt
-                        </Button>
+                    <TableCell>
+                      {((overview?.totalProfit / overview?.totalRevenue) * 100)?.toFixed(1)}%
                       </TableCell>
                     </TableRow>
-                  ))}
                 </TableBody>
               </Table>
             </CardContent>
           </Card>
-        </TabsContent>
-
-        <TabsContent value="analytics" className="space-y-4">
-          <div className="flex justify-end">
-            <Select value={selectedYear} onValueChange={setSelectedYear}>
-              <SelectTrigger className="w-[100px]">
-                <SelectValue placeholder="Year" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="2023">2023</SelectItem>
-                <SelectItem value="2022">2022</SelectItem>
-                <SelectItem value="2021">2021</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Monthly Revenue</CardTitle>
-              <CardDescription>Revenue generated by stakeholder's cars per month.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="h-[400px]">
-                <div className="h-full w-full flex items-center justify-center text-muted-foreground">
-                  Revenue Chart (This would be a real chart in production)
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle>Revenue by Car</CardTitle>
-                <CardDescription>Distribution of revenue across different cars.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="h-[300px]">
-                  <div className="h-full w-full flex items-center justify-center text-muted-foreground">
-                    Pie Chart (This would be a real chart in production)
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Booking Trends</CardTitle>
-                <CardDescription>Number of bookings over time.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="h-[300px]">
-                  <div className="h-full w-full flex items-center justify-center text-muted-foreground">
-                    Line Chart (This would be a real chart in production)
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
         </TabsContent>
       </Tabs>
     </div>

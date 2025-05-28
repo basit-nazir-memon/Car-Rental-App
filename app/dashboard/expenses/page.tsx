@@ -5,6 +5,8 @@ import type React from "react"
 import { useState, useEffect } from "react"
 import { Search, Plus, Filter, Download, Upload } from "lucide-react"
 import { format } from "date-fns"
+import jsPDF from "jspdf"
+import autoTable from "jspdf-autotable"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -36,8 +38,23 @@ interface Expense {
   category: string
 }
 
+interface Car {
+  _id: string;
+  model: string;
+  registrationNumber: string;
+}
+
 // Expense categories
-const expenseCategories = ["Maintenance", "Rent", "Fuel", "Salary", "Insurance", "Utilities", "Marketing", "Other"]
+const expenseCategories = ["Car", "Maintenance", "Rent", "Fuel", "Salary", "Insurance", "Utilities", "Marketing", "Other"]
+
+// Add type declaration
+declare module "jspdf" {
+  interface jsPDF {
+    lastAutoTable: {
+      finalY: number;
+    };
+  }
+}
 
 export default function ExpensesPage() {
   const [expenses, setExpenses] = useState<Expense[]>([])
@@ -48,19 +65,46 @@ export default function ExpensesPage() {
   const [selectedYear, setSelectedYear] = useState("all")
   const [selectedCategory, setSelectedCategory] = useState("all")
   const [isAddingExpense, setIsAddingExpense] = useState(false)
+  const [dialogOpen, setDialogOpen] = useState(false)
   const { toast } = useToast()
   const [isDeleting, setIsDeleting] = useState<string | null>(null)
+  const [cars, setCars] = useState<Car[]>([])
 
   const [newExpense, setNewExpense] = useState({
     title: "",
     description: "",
     amount: "",
     date: "",
-    category: ""
+    category: "",
+    carId: "",
+    office: ""
   })
+
+  const fetchCars = async () => {
+    try {
+      const token = localStorage.getItem("token")
+      const response = await fetch(`${config.backendUrl}/cars/all`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+      if (!response.ok) throw new Error("Failed to fetch cars")
+      const data = await response.json()
+      setCars(Array.isArray(data) ? data : [])
+    } catch (error) {
+      console.error("Error fetching cars:", error)
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to load cars. Please try again later.",
+      })
+      setCars([])
+    }
+  }
 
   useEffect(() => {
     fetchExpenses()
+    fetchCars()
   }, [selectedMonth, selectedYear, selectedCategory])
 
   const fetchExpenses = async () => {
@@ -130,6 +174,65 @@ export default function ExpensesPage() {
     }
   }
 
+  const downloadReport = () => {
+    const doc = new jsPDF()
+    
+    // Add header with background
+    doc.setFillColor(23, 37, 63)
+    doc.rect(0, 0, 210, 30, "F")
+    
+    // Add title
+    doc.setTextColor(255, 255, 255)
+    doc.setFontSize(20)
+    doc.text("Expense Report", 105, 20, { align: "center" })
+
+    // Add date
+    doc.setFontSize(9)
+    doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 165, 10)
+
+    // Add filters info
+    doc.setTextColor(0, 0, 0)
+    let filterText = ""
+    if (selectedMonth !== "all") filterText += `Month: ${selectedMonth}, `
+    if (selectedYear !== "all") filterText += `Year: ${selectedYear}, `
+    if (selectedCategory !== "all") filterText += `Category: ${selectedCategory}`
+    if (filterText === "") filterText += "None"
+    doc.text("Filters: " + filterText, 14, 40)
+    
+    
+    
+    // Add table
+    const tableData = expenses.map((expense) => [
+      expense.title,
+      expense.description,
+      expense.category,
+      format(new Date(expense.date), "MMM dd, yyyy"),
+      `Rs. ${expense.amount.toLocaleString()}`
+    ])
+    
+    autoTable(doc, {
+      startY: 45,
+      head: [["Title", "Description", "Category", "Date", "Amount"]],
+      body: tableData,
+      theme: "grid",
+      headStyles: { fillColor: [23, 37, 63] },
+      styles: { fontSize: 9 },
+      columnStyles: {
+        0: { cellWidth: 45 },
+        1: { cellWidth: 60 },
+        2: { cellWidth: 25 },
+        3: { cellWidth: 25 },
+        4: { cellWidth: 25 }
+      }
+    })
+    
+    // Add total
+    const total = expenses.reduce((sum, expense) => sum + expense.amount, 0)
+    doc.text(`Total: Rs. ${total.toLocaleString()}`, 14, doc.lastAutoTable.finalY + 10)
+    
+    doc.save("expense-report.pdf")
+  }
+
   const handleAddExpense = async () => {
     if (!newExpense.title || !newExpense.amount || !newExpense.date || !newExpense.category) {
       toast({
@@ -140,9 +243,36 @@ export default function ExpensesPage() {
       return
     }
 
+    // Validate car selection for car category
+    if (newExpense.category === "Car" && !newExpense.carId) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Please select a car for car-related expenses.",
+      })
+      return
+    }
+
+    // Validate office for non-car categories
+    if (newExpense.category !== "Car" && !newExpense.office) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Please enter the office name.",
+      })
+      return
+    }
+
     try {
       setIsAddingExpense(true)
       const token = localStorage.getItem("token")
+      
+      // Prepare the title with car information if it's a car expense
+      let finalTitle = newExpense.title;
+      if (newExpense.category === "Car" && newExpense.carId) {
+        const selectedCar = cars.find(car => car._id === newExpense.carId);
+        finalTitle = `${newExpense.title} for ${selectedCar?.model} (${selectedCar?.registrationNumber})`;
+      }
       
       const response = await fetch(`${config.backendUrl}/expenses`, {
         method: "POST",
@@ -151,11 +281,13 @@ export default function ExpensesPage() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          title: newExpense.title,
+          title: finalTitle,
           description: newExpense.description,
           amount: parseFloat(newExpense.amount),
           date: newExpense.date,
-          category: newExpense.category
+          category: newExpense.category,
+          carId: newExpense.carId,
+          office: newExpense.office
         }),
       })
 
@@ -168,15 +300,19 @@ export default function ExpensesPage() {
         description: "Expense added successfully.",
       })
 
-      // Reset form and refresh expenses
-    setNewExpense({
-      title: "",
-      description: "",
-      amount: "",
+      // Reset form and close dialog
+      setNewExpense({
+        title: "",
+        description: "",
+        amount: "",
         date: "",
-        category: ""
+        category: "",
+        carId: "",
+        office: ""
       })
+      setDialogOpen(false)
       fetchExpenses()
+      
     } catch (error) {
       console.error("Error adding expense:", error)
       toast({
@@ -238,76 +374,117 @@ export default function ExpensesPage() {
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-3xl font-bold tracking-tight">Expenses</h1>
-        <Dialog>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              Add Expense
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Add New Expense</DialogTitle>
-              <DialogDescription>Enter the expense details below to add it to the system.</DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <Label htmlFor="title">Expense Title</Label>
-                <Input
-                  id="title"
-                  value={newExpense.title}
-                  onChange={(e) => setNewExpense({ ...newExpense, title: e.target.value })}
-                  placeholder="Enter expense title"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="description">Description</Label>
-                <Textarea
-                  id="description"
-                  value={newExpense.description}
-                  onChange={(e) => setNewExpense({ ...newExpense, description: e.target.value })}
-                  placeholder="Enter expense description"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={downloadReport}>
+            <Download className="mr-2 h-4 w-4" />
+            Download Report
+          </Button>
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="mr-2 h-4 w-4" />
+                Add Expense
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Add New Expense</DialogTitle>
+                <DialogDescription>Enter the expense details below to add it to the system.</DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
                 <div className="grid gap-2">
-                  <Label htmlFor="amount">Amount</Label>
+                  <Label htmlFor="category">Category *</Label>
+                  <Select 
+                    value={newExpense.category} 
+                    onValueChange={(value) => setNewExpense({ ...newExpense, category: value, carId: "", office: "" })}
+                  >
+                    <SelectTrigger id="category">
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {expenseCategories.map((category) => (
+                        <SelectItem key={category} value={category}>
+                          {category}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {newExpense.category === "Car" ? (
+                  <div className="grid gap-2">
+                    <Label htmlFor="carId">Select Car *</Label>
+                    <Select 
+                      value={newExpense.carId} 
+                      onValueChange={(value) => setNewExpense({ ...newExpense, carId: value })}
+                    >
+                      <SelectTrigger id="carId">
+                        <SelectValue placeholder="Select a car" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {cars.map((car) => (
+                          <SelectItem key={car._id} value={car._id}>
+                            {car.model} ({car.registrationNumber})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : newExpense.category !== "" && (
+                  <div className="grid gap-2">
+                    <Label htmlFor="office">Office *</Label>
+                    <Input
+                      id="office"
+                      value={newExpense.office}
+                      onChange={(e) => setNewExpense({ ...newExpense, office: e.target.value })}
+                      placeholder="Enter office name"
+                    />
+                  </div>
+                )}
+
+                <div className="grid gap-2">
+                  <Label htmlFor="title">Expense Title</Label>
                   <Input
-                    id="amount"
-                    type="number"
-                    value={newExpense.amount}
-                    onChange={(e) => setNewExpense({ ...newExpense, amount: e.target.value })}
-                    placeholder="Enter amount"
+                    id="title"
+                    value={newExpense.title}
+                    onChange={(e) => setNewExpense({ ...newExpense, title: e.target.value })}
+                    placeholder="Enter expense title"
                   />
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="date">Date</Label>
-                  <Input id="date" type="date" value={newExpense.date} onChange={(e) => setNewExpense({ ...newExpense, date: e.target.value })} />
+                  <Label htmlFor="description">Description</Label>
+                  <Textarea
+                    id="description"
+                    value={newExpense.description}
+                    onChange={(e) => setNewExpense({ ...newExpense, description: e.target.value })}
+                    placeholder="Enter expense description"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="amount">Amount</Label>
+                    <Input
+                      id="amount"
+                      type="number"
+                      value={newExpense.amount}
+                      onChange={(e) => setNewExpense({ ...newExpense, amount: e.target.value })}
+                      placeholder="Enter amount"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="date">Date</Label>
+                    <Input id="date" type="date" value={newExpense.date} onChange={(e) => setNewExpense({ ...newExpense, date: e.target.value })} />
+                  </div>
                 </div>
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="category">Category</Label>
-                <Select value={newExpense.category} onValueChange={(value) => setNewExpense({ ...newExpense, category: value })}>
-                  <SelectTrigger id="category">
-                    <SelectValue placeholder="Select category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {expenseCategories.map((category) => (
-                      <SelectItem key={category} value={category}>
-                        {category}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button onClick={handleAddExpense} disabled={isAddingExpense}>
-                {isAddingExpense ? "Adding..." : "Add Expense"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+              <DialogFooter>
+                <Button onClick={handleAddExpense} disabled={isAddingExpense}>
+                  {isAddingExpense ? "Adding..." : "Add Expense"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -396,7 +573,7 @@ export default function ExpensesPage() {
                   <TableCell className="max-w-[300px] truncate">{expense.description}</TableCell>
                   <TableCell>{expense.category}</TableCell>
                   <TableCell>{format(new Date(expense.date), "MMM dd, yyyy")}</TableCell>
-                  <TableCell>${expense.amount.toLocaleString()}</TableCell>
+                  <TableCell>Rs.{expense.amount.toLocaleString()}</TableCell>
                   <TableCell className="text-right">
                     <Button 
                       variant="outline" 

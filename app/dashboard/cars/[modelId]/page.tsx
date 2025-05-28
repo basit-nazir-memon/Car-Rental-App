@@ -1,92 +1,113 @@
-"use client"
+"use client";
 
-import { useEffect, useState } from "react"
-import { useParams, useSearchParams } from "next/navigation"
-import Image from "next/image"
-import Link from "next/link"
-import { ChevronLeft, Search } from "lucide-react"
-import { Skeleton } from "@/components/ui/skeleton"
+import { useEffect, useState } from "react";
+import { useParams, useSearchParams } from "next/navigation";
+import Image from "next/image";
+import Link from "next/link";
+import { ChevronLeft, Search } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Card, CardContent } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import config from "../../../../config"
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import config from "../../../../config";
+
+interface CarStats {
+  totalBookings: number;
+  totalRevenue: number;
+}
 
 interface CarInstance {
-  id: string
-  color: string
-  registrationNumber: string
-  chassisNumber: string
-  engineNumber: string
-  year: number
-  available: boolean
-  image: string
+  id: string;
+  color: string;
+  registrationNumber: string;
+  chassisNumber: string;
+  engineNumber: string;
+  year: number;
+  available: boolean;
+  image: string;
+  variant: string;
+  stats: CarStats;
 }
 
 interface CarModel {
-  id: number
-  name: string
-  image: string
-  availableColors: string[]
-  availableCount: number
-  totalCount: number
-  instances: CarInstance[]
+  id: number;
+  name: string;
+  image: string;
+  availableColors: string[];
+  availableCount: number;
+  totalCount: number;
+  instances: CarInstance[];
 }
 
 export default function CarModelPage() {
-  const params = useParams()
-  const searchParams = useSearchParams()
-  const [searchQuery, setSearchQuery] = useState("")
-  const [carModel, setCarModel] = useState<CarModel | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const params = useParams();
+  const searchParams = useSearchParams();
+  const [searchQuery, setSearchQuery] = useState("");
+  const [carModel, setCarModel] = useState<CarModel | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const [userRole, setUserRole] = useState("");
+
+  useEffect(() => {
+    const role = localStorage.getItem("role");
+    if (role) {
+      setUserRole(role);
+    }
+  }, []);
 
   useEffect(() => {
     const fetchCarModel = async () => {
       try {
-        setIsLoading(true)
-        const token = localStorage.getItem("token")
-        
-        let url = `${config.backendUrl}/cars/${params.modelId}`
-        const startDate = searchParams.get("startDate")
-        const endDate = searchParams.get("endDate")
-        
+        setIsLoading(true);
+        const token = localStorage.getItem("token");
+
+        let url = `${config.backendUrl}/cars/${params.modelId}`;
+        const startDate = searchParams.get("startDate");
+        const endDate = searchParams.get("endDate");
+
         if (startDate && endDate) {
-          url += `?startDate=${startDate}&endDate=${endDate}`
+          url += `?startDate=${startDate}&endDate=${endDate}`;
         }
-        
+
         const response = await fetch(url, {
           method: "GET",
           headers: {
             "Content-Type": "application/json",
-            "Authorization": `Bearer ${token}`,
+            Authorization: `Bearer ${token}`,
           },
-        })
+        });
 
         if (!response.ok) {
-          throw new Error(`HTTP error! Status: ${response.status}`)
+          throw new Error(`HTTP error! Status: ${response.status}`);
         }
 
-        const data = await response.json()
-        setCarModel(data)
-        console.log(data)
+        const data = await response.json();
+        setCarModel(data);
+        console.log(data);
       } catch (error) {
-        console.error("Error fetching car model:", error)
+        console.error("Error fetching car model:", error);
       } finally {
-        setIsLoading(false)
+        setIsLoading(false);
       }
-    }
+    };
 
-    fetchCarModel()
-  }, [params.modelId, searchParams])
+    fetchCarModel();
+  }, [params.modelId, searchParams]);
 
   // Filter instances based on search query
-  const filteredInstances = carModel?.instances.filter(
-    (instance) =>
-      instance.registrationNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      instance.chassisNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      instance.color.toLowerCase().includes(searchQuery.toLowerCase()),
-  ) || []
+  const filteredInstances =
+    carModel?.instances.filter(
+      (instance) =>
+        instance.registrationNumber
+          .toLowerCase()
+          .includes(searchQuery.toLowerCase()) ||
+        instance.chassisNumber
+          .toLowerCase()
+          .includes(searchQuery.toLowerCase()) ||
+        instance.color.toLowerCase().includes(searchQuery.toLowerCase())
+    ) || [];
 
   if (isLoading) {
     return (
@@ -116,7 +137,7 @@ export default function CarModelPage() {
           ))}
         </div>
       </div>
-    )
+    );
   }
 
   if (!carModel) {
@@ -128,10 +149,12 @@ export default function CarModelPage() {
               <ChevronLeft className="h-4 w-4" />
             </Link>
           </Button>
-          <h1 className="text-3xl font-bold tracking-tight">Car Model Not Found</h1>
+          <h1 className="text-3xl font-bold tracking-tight">
+            Car Model Not Found
+          </h1>
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -158,7 +181,10 @@ export default function CarModelPage() {
 
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {filteredInstances.map((instance) => (
-          <Link href={`/dashboard/cars/${params.modelId}/${instance.id}`} key={instance.id}>
+          <Link
+            href={`/dashboard/cars/${params.modelId}/${instance.id}`}
+            key={instance.id}
+          >
             <Card className="overflow-hidden transition-all hover:shadow-md">
               <div className="relative h-48">
                 <Image
@@ -176,14 +202,35 @@ export default function CarModelPage() {
               <CardContent className="p-4">
                 <div className="flex flex-col gap-1">
                   <h3 className="text-lg font-semibold">
-                    {carModel.name} ({instance.year})
+                    {carModel.name} {instance.variant} ({instance.year})
                   </h3>
                   <div className="flex items-center gap-2">
-                    <div className="h-4 w-4 rounded-full border" style={{ backgroundColor: instance.color }} />
+                    <div
+                      className="h-4 w-4 rounded-full border"
+                      style={{ backgroundColor: instance.color }}
+                    />
                     <span className="text-sm capitalize">{instance.color}</span>
                   </div>
-                  <p className="text-sm text-muted-foreground">Reg: {instance.registrationNumber}</p>
-                  <p className="text-sm text-muted-foreground">Chassis: {instance.chassisNumber}</p>
+                  <p className="text-sm text-muted-foreground">
+                    Reg: {instance.registrationNumber}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Chassis: {instance.chassisNumber}
+                  </p>
+                  {userRole === "admin" && (
+                      <div className="mt-4">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full"
+                          asChild
+                        >
+                          <Link href={`/dashboard/my-cars/${instance?.id}`}>
+                            View Details
+                          </Link>
+                        </Button>
+                      </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -191,6 +238,5 @@ export default function CarModelPage() {
         ))}
       </div>
     </div>
-  )
+  );
 }
-

@@ -165,7 +165,7 @@ export default function CarsPage() {
             onChange={(e) => setSearchQuery(e.target.value)}
           />
           {isAdmin && (
-            <AddCar onCarAdded={onCarAdded}/>
+          <AddCar onCarAdded={onCarAdded}/>
           )}
         </div>
       </div>
@@ -198,45 +198,45 @@ export default function CarsPage() {
               }}
               key={car.id}
             >
-              <Card
-                className={`overflow-hidden transition-all hover:shadow-md ${
-                  car.availableCount === 0 ? "opacity-60" : ""
-                }`}
-              >
-                <div className="relative h-48">
-                  <Image
-                    src={car.image || "/placeholder.svg"}
-                    alt={car.name}
-                    fill
-                    className="object-cover"
-                  />
-                  <div className="absolute bottom-2 left-2">
-                    <Badge
-                      variant={car.availableCount > 0 ? "default" : "destructive"}
-                    >
-                      {car.availableCount > 0
-                        ? `${car.availableCount}/${car.totalCount} Available`
-                        : "Not Available"}
-                    </Badge>
+            <Card
+              className={`overflow-hidden transition-all hover:shadow-md ${
+                car.availableCount === 0 ? "opacity-60" : ""
+              }`}
+            >
+              <div className="relative h-48">
+                <Image
+                  src={car.image || "/placeholder.svg"}
+                  alt={car.name}
+                  fill
+                  className="object-cover"
+                />
+                <div className="absolute bottom-2 left-2">
+                  <Badge
+                    variant={car.availableCount > 0 ? "default" : "destructive"}
+                  >
+                    {car.availableCount > 0
+                      ? `${car.availableCount}/${car.totalCount} Available`
+                      : "Not Available"}
+                  </Badge>
+                </div>
+              </div>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold">{car.name}</h3>
+                  <div className="flex gap-1">
+                    {car.availableColors.map((color) => (
+                      <div
+                        key={color}
+                        className="h-4 w-4 rounded-full border"
+                        style={{ backgroundColor: color }}
+                        title={color.charAt(0).toUpperCase() + color.slice(1)}
+                      />
+                    ))}
                   </div>
                 </div>
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-semibold">{car.name}</h3>
-                    <div className="flex gap-1">
-                      {car.availableColors.map((color) => (
-                        <div
-                          key={color}
-                          className="h-4 w-4 rounded-full border"
-                          style={{ backgroundColor: color }}
-                          title={color.charAt(0).toUpperCase() + color.slice(1)}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </Link>
+              </CardContent>
+            </Card>
+          </Link>
           ))
         )}
       </div>

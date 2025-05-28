@@ -5,6 +5,7 @@ import { useState, useEffect } from "react"
 import { Search, UserPlus, Loader2 } from "lucide-react"
 import Image from "next/image"
 import { toast } from "sonner"
+import Link from "next/link"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -23,7 +24,7 @@ import { Label } from "@/components/ui/label"
 import config from "../../../config"
 
 interface Stakeholder {
-  id: string
+  _id: string
   name: string
   idNumber: string
   email: string
@@ -98,6 +99,24 @@ export default function StakeholdersPage() {
 
     if (id === "avatar" && files && files.length > 0) {
       setNewStakeholder((prev) => ({ ...prev, avatar: files[0] }))
+    } else if (id === "idCardNumber") {
+      // Remove all non-numeric characters
+      const cleaned = value.replace(/[^0-9]/g, '')
+      let formatted = cleaned
+      
+      // Add dashes automatically
+      if (cleaned.length > 5) {
+        formatted = cleaned.slice(0, 5) + '-' + cleaned.slice(5)
+      }
+      if (cleaned.length > 12) {
+        formatted = formatted.slice(0, 13) + '-' + cleaned.slice(12)
+      }
+      
+      setNewStakeholder((prev) => ({ ...prev, [id]: formatted }))
+    } else if (id === "cellPhone") {
+      // Allow only numbers
+      const formatted = value.replace(/[^0-9]/g, '')
+      setNewStakeholder((prev) => ({ ...prev, [id]: formatted }))
     } else {
       setNewStakeholder((prev) => ({ ...prev, [id]: value }))
     }
@@ -182,7 +201,8 @@ export default function StakeholdersPage() {
                   id="idCardNumber"
                   value={newStakeholder.idCardNumber}
                   onChange={handleInputChange}
-                  placeholder="Enter stakeholder's ID card number"
+                  placeholder="XXXXX-XXXXXXX-X"
+                  maxLength={15}
                 />
               </div>
               <div className="grid gap-2">
@@ -201,7 +221,8 @@ export default function StakeholdersPage() {
                   id="cellPhone"
                   value={newStakeholder.cellPhone}
                   onChange={handleInputChange}
-                  placeholder="Enter stakeholder's phone number"
+                  placeholder="03XXXXXXXXX"
+                  maxLength={11}
                 />
               </div>
               <div className="grid gap-2">
@@ -278,7 +299,7 @@ export default function StakeholdersPage() {
                 </TableRow>
               ) : (
                 filteredStakeholders.map((stakeholder) => (
-                  <TableRow key={stakeholder.id}>
+                  <TableRow key={stakeholder._id}>
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <div className="h-10 w-10 rounded-full overflow-hidden">
@@ -310,8 +331,10 @@ export default function StakeholdersPage() {
                       {new Date(stakeholder.createdAt).toLocaleDateString()}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button variant="outline" size="sm">
-                        View Details
+                      <Button variant="outline" size="sm" asChild>
+                        <Link href={`/dashboard/stakeholders/${stakeholder._id}`}>
+                          View Details
+                        </Link>
                       </Button>
                     </TableCell>
                   </TableRow>

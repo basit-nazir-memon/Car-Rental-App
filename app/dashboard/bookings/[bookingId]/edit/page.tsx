@@ -429,7 +429,7 @@ export default function EditBookingPage({
               <div className="flex justify-between">
                 <p className="font-medium">Remaining Amount</p>
                 <p className="font-bold text-lg">
-                  ${(Number(formData.totalAmount) * (100 - Number(formData.discount)) / 100) - Number(formData.advancePaid) }
+                  Rs.{(Number(formData.totalAmount) * (100 - Number(formData.discount)) / 100) - Number(formData.advancePaid) }
                 </p>
               </div>
             </CardContent>

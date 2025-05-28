@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useState, useEffect } from "react"
-import { Search, UserPlus } from "lucide-react"
+import { Search, UserPlus, Download } from "lucide-react"
 import Link from "next/link"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -22,10 +22,13 @@ import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 import config from "../../../config"
 import { format } from "date-fns"
+import jsPDF from "jspdf"
+import autoTable from "jspdf-autotable"
 
 interface Customer {
   _id: string
   fullName: string
+  careOf: string
   phoneNumber: string
   idCardNumber: string
   bookingCount: number
@@ -35,12 +38,16 @@ interface Customer {
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [isAdding, setIsAdding] = useState(false)
+  const [showAddDialog, setShowAddDialog] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [newCustomer, setNewCustomer] = useState({
     name: "",
+    careOf: "",
     phone: "",
     idCard: "",
+    email: "",
+    address: "",
   })
 
   useEffect(() => {
@@ -79,18 +86,52 @@ export default function CustomersPage() {
       customer.idCardNumber.includes(searchQuery),
   )
 
+  const formatCNIC = (value: string) => {
+    // Remove all non-digit characters
+    const digits = value.replace(/\D/g, "")
+    
+    // Format as XXXXX-XXXXXXX-X
+    if (digits.length <= 5) return digits
+    if (digits.length <= 12) return `${digits.slice(0, 5)}-${digits.slice(5)}`
+    return `${digits.slice(0, 5)}-${digits.slice(5, 12)}-${digits.slice(12, 13)}`
+  }
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { id, value } = e.target
-    setNewCustomer((prev) => ({ ...prev, [id]: value }))
+    
+    if (id === "idCard") {
+      setNewCustomer(prev => ({
+        ...prev,
+        idCard: formatCNIC(value)
+      }))
+    } else {
+      setNewCustomer(prev => ({
+        ...prev,
+        [id]: value
+      }))
+    }
   }
 
   const handleAddCustomer = async () => {
-    if (!newCustomer.name || !newCustomer.phone || !newCustomer.idCard) {
-      toast.error("All fields are required")
+    // Validate required fields
+    if (!newCustomer.name || !newCustomer.careOf || !newCustomer.phone || !newCustomer.idCard) {
+      toast.error("Name, Care Of, Phone, and ID Card are required")
       return
     }
 
-    setIsAdding(true)
+    // Validate phone number format
+    if (!/^[0-9]{11}$/.test(newCustomer.phone)) {
+      toast.error("Please enter a valid 11-digit phone number")
+      return
+    }
+
+    // Validate email format if provided
+    if (newCustomer.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newCustomer.email)) {
+      toast.error("Please enter a valid email address")
+      return
+    }
+
+    setIsSubmitting(true)
     try {
       const token = localStorage.getItem("token")
       const response = await fetch(`${config.backendUrl}/customers`, {
@@ -101,8 +142,11 @@ export default function CustomersPage() {
         },
         body: JSON.stringify({
           fullName: newCustomer.name,
+          careOf: newCustomer.careOf,
           phoneNumber: newCustomer.phone,
-          idCardNumber: newCustomer.idCard
+          idCardNumber: newCustomer.idCard,
+          email: newCustomer.email || undefined,
+          address: newCustomer.address || undefined
         }),
       })
 
@@ -118,14 +162,64 @@ export default function CustomersPage() {
       }
 
       toast.success("Customer added successfully")
-      setNewCustomer({ name: "", phone: "", idCard: "" })
+      setNewCustomer({ name: "", careOf: "", phone: "", idCard: "", email: "", address: "" })
+      setShowAddDialog(false)
       fetchCustomers() // Refresh the list
     } catch (error) {
       console.error("Error adding customer:", error)
       toast.error("Failed to add customer. Please try again.")
     } finally {
-      setIsAdding(false)
+      setIsSubmitting(false)
     }
+  }
+
+  const downloadPDF = () => {
+    const doc = new jsPDF()
+    
+    // Add header with background
+    doc.setFillColor(23, 37, 63) // Dark blue background
+    doc.rect(0, 0, 210, 30, "F")
+    
+    // Add title
+    doc.setTextColor(255, 255, 255)
+    doc.setFontSize(20)
+    doc.text("Customer List", 105, 20, { align: "center" })
+    
+    // Add date
+    doc.setFontSize(9)
+    doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 205, 10, { align: "right" })
+    
+    // Reset text color for table
+    doc.setTextColor(0, 0, 0)
+    
+    // Add table
+    const tableData = customers.map(customer => [
+      customer.fullName,
+      customer.phoneNumber,
+      customer.idCardNumber,
+      customer.careOf || "N/A",
+      customer.bookingCount,
+      customer.lastBookingDate ? format(new Date(customer.lastBookingDate), "dd/MM/yyyy") : "N/A"
+    ])
+    
+    autoTable(doc, {
+      startY: 40,
+      head: [["Name", "Phone", "ID Card", "Care Of", "Total Bookings", "Last Booking"]],
+      body: tableData,
+      theme: "grid",
+      headStyles: { fillColor: [23, 37, 63] },
+      styles: { fontSize: 10 },
+      columnStyles: {
+        0: { cellWidth: 35 },
+        1: { cellWidth: 27 },
+        2: { cellWidth: 35 },
+        3: { cellWidth: 30 },
+        4: { cellWidth: 20 },
+        5: { cellWidth: 25 }
+      }
+    })
+    
+    doc.save("customer-list.pdf")
   }
 
   if (isLoading) {
@@ -161,56 +255,15 @@ export default function CustomersPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight">Customers</h1>
-        <Dialog>
-          <DialogTrigger asChild>
-            <Button>
-              <UserPlus className="mr-2 h-4 w-4" />
-              Add Customer
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={downloadPDF}>
+            <Download className="mr-2 h-4 w-4" />
+            Download PDF
             </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Add New Customer</DialogTitle>
-              <DialogDescription>Enter the customer details below to add them to the system.</DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <Label htmlFor="name">Full Name</Label>
-                <Input
-                  id="name"
-                  value={newCustomer.name}
-                  onChange={handleInputChange}
-                  placeholder="Enter customer's full name"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="phone">Phone Number</Label>
-                <Input
-                  id="phone"
-                  value={newCustomer.phone}
-                  onChange={handleInputChange}
-                  placeholder="Enter customer's phone number"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="idCard">ID Card Number</Label>
-                <Input
-                  id="idCard"
-                  value={newCustomer.idCard}
-                  onChange={handleInputChange}
-                  placeholder="Enter customer's ID card number"
-                />
-              </div>
+          <Button onClick={() => setShowAddDialog(true)}>Add Customer</Button>
             </div>
-            <DialogFooter>
-              <Button onClick={handleAddCustomer} disabled={isAdding}>
-                {isAdding ? "Adding..." : "Add Customer"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
       </div>
 
       <div className="relative">
@@ -264,6 +317,83 @@ export default function CustomersPage() {
           </Table>
         </CardContent>
       </Card>
+
+      <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add New Customer</DialogTitle>
+            <DialogDescription>Enter the customer details below to add them to the system.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="name">Full Name *</Label>
+              <Input
+                id="name"
+                value={newCustomer.name}
+                onChange={handleInputChange}
+                placeholder="Enter customer's full name"
+                required
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="careOf">Care Of *</Label>
+              <Input
+                id="careOf"
+                value={newCustomer.careOf}
+                onChange={handleInputChange}
+                placeholder="Enter care of name"
+                required
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="phone">Phone Number *</Label>
+              <Input
+                id="phone"
+                value={newCustomer.phone}
+                onChange={handleInputChange}
+                placeholder="Enter 11-digit phone number"
+                maxLength={11}
+                required
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="idCard">ID Card Number *</Label>
+              <Input
+                id="idCard"
+                value={newCustomer.idCard}
+                onChange={handleInputChange}
+                placeholder="XXXXX-XXXXXXX-X"
+                maxLength={15}
+                required
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                value={newCustomer.email}
+                onChange={handleInputChange}
+                placeholder="Enter customer's email"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="address">Address</Label>
+              <Input
+                id="address"
+                value={newCustomer.address}
+                onChange={handleInputChange}
+                placeholder="Enter customer's address"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={handleAddCustomer} disabled={isSubmitting}>
+              {isSubmitting ? "Adding..." : "Add Customer"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

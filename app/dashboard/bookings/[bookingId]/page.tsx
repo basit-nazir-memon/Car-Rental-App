@@ -45,6 +45,7 @@ interface Booking {
     engineNumber: string
     image: string
     meterReading: number
+    variant: string
   }
   driver: {
     name: string
@@ -58,8 +59,9 @@ interface Booking {
     startDate: string
     endDate: string
     actualEndDate: string | null
-    startTime: string
+    tripStartTime: string
     endTime: string | null
+    description: string
   }
   billing: {
     totalAmount: number
@@ -72,6 +74,8 @@ interface Booking {
   createdBy: string
   updatedAt: string
   lastModifiedBy: string
+  driverPreference: "driver" | "self"
+  customerLicenseNumber: string | null
 }
 
 export default function BookingDetailPage() {
@@ -202,6 +206,7 @@ export default function BookingDetailPage() {
       // Refresh the page to show updated status
       router.refresh()
       setIsCancelDialogOpen(false)
+      setBookingData(prevData => prevData ? { ...prevData, status: "cancelled" } : null)
     } catch (error) {
       console.error("Error cancelling booking:", error)
       setCancelError("Failed to cancel booking. Please try again.")
@@ -345,22 +350,33 @@ export default function BookingDetailPage() {
               <CardTitle>Driver Information</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center gap-4">
-                <div className="h-16 w-16 rounded-full overflow-hidden">
-                  <Image
-                    src={bookingData.driver.image || "/placeholder.svg"}
-                    alt={bookingData.driver.name}
-                    width={64}
-                    height={64}
-                    className="object-cover"
-                  />
+              {bookingData.driverPreference === "driver" ? (
+                <div className="flex items-center gap-4">
+                  <div className="h-16 w-16 rounded-full overflow-hidden">
+                    <Image
+                      src={bookingData.driver.image || "/placeholder.svg"}
+                      alt={bookingData.driver.name}
+                      width={64}
+                      height={64}
+                      className="object-cover"
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 gap-1">
+                    <p className="font-medium">{bookingData.driver.name}</p>
+                    <p className="text-sm text-muted-foreground">{bookingData.driver.phone}</p>
+                    <p className="text-sm text-muted-foreground">ID: {bookingData.driver.idCard}</p>
+                  </div>
                 </div>
-                <div className="grid grid-cols-1 gap-1">
-                  <p className="font-medium">{bookingData.driver.name}</p>
-                  <p className="text-sm text-muted-foreground">{bookingData.driver.phone}</p>
-                  <p className="text-sm text-muted-foreground">ID: {bookingData.driver.idCard}</p>
+              ) : (
+                <div className="space-y-2">
+                  <p className="font-medium">Self Drive</p>
+                  {bookingData.customerLicenseNumber && (
+                    <p className="text-sm text-muted-foreground">
+                      License Number: {bookingData.customerLicenseNumber}
+                    </p>
+                  )}
                 </div>
-              </div>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -383,6 +399,10 @@ export default function BookingDetailPage() {
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Model</p>
                   <p>{bookingData.car.model}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Variant</p>
+                  <p>{bookingData.car.variant || "-"}</p>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Year</p>
@@ -432,7 +452,7 @@ export default function BookingDetailPage() {
                       <p>{bookingData.trip.city}</p>
                     </div>
                   )}
-                  <div className="col-span-2">
+                  <div>
                     <p className="text-sm font-medium text-muted-foreground">Duration</p>
                     <p>
                       {format(new Date(bookingData.trip.startDate), "MMM dd, yyyy")} -{" "}
@@ -440,9 +460,25 @@ export default function BookingDetailPage() {
                     </p>
                   </div>
                   {bookingData.trip.actualEndDate && (
-                    <div className="col-span-2">
+                    <div>
                       <p className="text-sm font-medium text-muted-foreground">Actual End Date</p>
                       <p>{format(new Date(bookingData.trip.actualEndDate), "MMM dd, yyyy")}</p>
+                    </div>
+                  )}
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Start Time</p>
+                    <p>{bookingData.trip.tripStartTime}</p>
+                  </div>
+                  {bookingData.trip.endTime && (
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">End Time</p>
+                      <p>{bookingData.trip.endTime}</p>
+                    </div>
+                  )}
+                  {bookingData.trip.description && (
+                    <div className="col-span-2">
+                      <p className="text-sm font-medium text-muted-foreground">Description</p>
+                      <p className="whitespace-pre-wrap">{bookingData.trip.description}</p>
                     </div>
                   )}
                 </div>
@@ -457,11 +493,11 @@ export default function BookingDetailPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">Total Amount</p>
-                    <p className="text-lg font-semibold">${bookingData.billing.totalAmount}</p>
+                    <p className="text-lg font-semibold">Rs.{bookingData.billing.totalAmount}</p>
                   </div>
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">Advance Paid</p>
-                    <p>${bookingData.billing.advancePaid}</p>
+                    <p>Rs.{bookingData.billing.advancePaid}</p>
                   </div>
                   {bookingData.billing.discount > 0 && (
                     <>
@@ -479,7 +515,7 @@ export default function BookingDetailPage() {
                     <Separator className="my-2" />
                     <div className="flex justify-between">
                       <p className="font-medium">Remaining Amount</p>
-                      <p className="font-bold text-lg">${bookingData.billing.remaining}</p>
+                      <p className="font-bold text-lg">Rs.{bookingData.billing.remaining}</p>
                     </div>
                   </div>
                 </div>
